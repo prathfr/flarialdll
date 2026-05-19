@@ -26,6 +26,7 @@ private:
         auto event = nes::make_holder<DrawTextEvent>(text);
         eventMgr.trigger(event);
 
+
         funcOriginalText(ctx, font, pos, text, color, alpha, textAlignment, textMeasureData, caretMeasureData);
 
         if (!renderedText) {

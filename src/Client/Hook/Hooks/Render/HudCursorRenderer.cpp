@@ -7,15 +7,14 @@ void HudCursorRendererHook::enableHook() {
     this->autoHook((void *) HudCursorRenderer_renderCallback, (void **) &funcOriginal);
 }
 
-void* HudCursorRendererHook::HudCursorRenderer_renderCallback(struct HudCursorRenderer *_this,
-                                                                      struct MinecraftUIRenderContext *renderContext,
-                                                                      struct IClientInstance *client,
-                                                                      struct UIControl *owner, int pass,
-                                                                      struct RectangleArea *renderAABB) {
-    auto event = nes::make_holder<HudCursorRendererRenderEvent>(renderAABB, renderContext);
+void __fastcall HudCursorRendererHook::HudCursorRenderer_renderCallback(struct HudCursorRenderer *_this,
+                                                                        struct MinecraftUIRenderContext *renderContext,
+                                                                        struct IClientInstance *client,
+                                                                        struct UIControl *owner, int pass) {
+    auto event = nes::make_holder<HudCursorRendererRenderEvent>(nullptr, renderContext);
     eventMgr.trigger(event);
 
-    if(event->isCancelled()) return nullptr;
+    if(event->isCancelled()) return;
 
-    return funcOriginal(_this, renderContext, client, owner, pass, renderAABB);
+    funcOriginal(_this, renderContext, client, owner, pass);
 }

@@ -204,7 +204,8 @@ HRESULT SwapchainHook::swapchainCallback(IDXGISwapChain3 *pSwapChain, UINT syncI
     if (Client::disable || !Client::init) return funcOriginal(pSwapChain, syncInterval, flags);
 
 
-    Logger::debug("{}", (void*)SDK::getBgfxContext()->getRendererContext());
+    // DUDE, WHY LOG HERE. it's spamming EVERY FRAME
+    // Logger::debug("{}", (void*)SDK::getBgfxContext()->getRendererContext());
     // Detect the actual API from the swapchain
     GraphicsAPI detectedAPI = DetectSwapchainAPI(pSwapChain);
 
@@ -278,6 +279,8 @@ HRESULT SwapchainHook::swapchainCallback(IDXGISwapChain3 *pSwapChain, UINT syncI
 
     FPSMeasure();
 
+    // Reset per-frame flags for panorama shader rendering at the START of each frame
+    // This must happen before any rendering to ensure the shader renders once per frame
     UnderUIHooks::resetPanoramaFrameFlag();
 
 
@@ -444,8 +447,70 @@ winrt::com_ptr<ID3D11Texture2D> SwapchainHook::GetBackbuffer() {
     return SavedD3D11BackBuffer;
 }
 
+namespace {
+    bool GetTextureDesc(ID3D11Texture2D* texture, D3D11_TEXTURE2D_DESC& desc) {
+        if (!texture) {
+            return false;
+        }
+
+        texture->GetDesc(&desc);
+        return true;
+    }
+
+    bool AreCopyCompatible(const D3D11_TEXTURE2D_DESC& sourceDesc, const D3D11_TEXTURE2D_DESC& destDesc) {
+        return sourceDesc.Width == destDesc.Width
+            && sourceDesc.Height == destDesc.Height
+            && sourceDesc.MipLevels == destDesc.MipLevels
+            && sourceDesc.ArraySize == destDesc.ArraySize
+            && sourceDesc.Format == destDesc.Format
+            && sourceDesc.SampleDesc.Count == destDesc.SampleDesc.Count
+            && sourceDesc.SampleDesc.Quality == destDesc.SampleDesc.Quality;
+    }
+
+    bool TryCopyTexture(ID3D11Texture2D* source, ID3D11Texture2D* dest) {
+        if (!SwapchainHook::context || !source || !dest) {
+            return false;
+        }
+
+        D3D11_TEXTURE2D_DESC sourceDesc = {};
+        D3D11_TEXTURE2D_DESC destDesc = {};
+        if (!GetTextureDesc(source, sourceDesc) || !GetTextureDesc(dest, destDesc) || !AreCopyCompatible(sourceDesc, destDesc)) {
+            return false;
+        }
+
+        SwapchainHook::context->CopyResource(dest, source);
+        return true;
+    }
+}
+
 void SwapchainHook::InitializeBackbufferStorage(int maxFrames) {
-    if (maxFrames <= 0 || maxFrames == maxBackbufferFrames) return;
+    if (maxFrames <= 0 || !swapchain || !d3d11Device) return;
+
+    winrt::com_ptr<ID3D11Texture2D> currentBackbuffer;
+    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(currentBackbuffer.put()))) || !currentBackbuffer) {
+        return;
+    }
+
+    D3D11_TEXTURE2D_DESC currentDesc = {};
+    currentBackbuffer->GetDesc(&currentDesc);
+
+    bool storageMatchesCurrentBackbuffer = false;
+    if (maxFrames == maxBackbufferFrames
+        && !backbufferStorage.empty()
+        && !backbufferStorageUnderUI.empty()
+        && backbufferStorage.front().texture
+        && backbufferStorageUnderUI.front().texture) {
+        D3D11_TEXTURE2D_DESC existingDesc = {};
+        D3D11_TEXTURE2D_DESC existingUnderUIDesc = {};
+        backbufferStorage.front().texture->GetDesc(&existingDesc);
+        backbufferStorageUnderUI.front().texture->GetDesc(&existingUnderUIDesc);
+        storageMatchesCurrentBackbuffer = AreCopyCompatible(currentDesc, existingDesc)
+            && AreCopyCompatible(currentDesc, existingUnderUIDesc);
+    }
+
+    if (storageMatchesCurrentBackbuffer) {
+        return;
+    }
 
     CleanupBackbufferStorage();
 
@@ -455,14 +520,15 @@ void SwapchainHook::InitializeBackbufferStorage(int maxFrames) {
     backbufferStorage.resize(maxFrames);
     backbufferStorageUnderUI.resize(maxFrames);
 
-    if (!SavedD3D11BackBuffer) { swapchain->GetBuffer(0, IID_PPV_ARGS(SavedD3D11BackBuffer.put())); }
+    SavedD3D11BackBuffer = currentBackbuffer;
 
-    D3D11_TEXTURE2D_DESC textureDesc = {};
-    SavedD3D11BackBuffer->GetDesc(&textureDesc);
+    D3D11_TEXTURE2D_DESC textureDesc = currentDesc;
     textureDesc.Usage = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     textureDesc.CPUAccessFlags = 0;
     SavedD3D11BackBuffer = nullptr;
+    lastBackbufferWidth = currentDesc.Width;
+    lastBackbufferHeight = currentDesc.Height;
 
     // Create all textures and SRVs upfront for regular storage
     for (int i = 0; i < maxFrames; ++i) {
@@ -528,30 +594,29 @@ void SwapchainHook::SaveBackbuffer(bool underui) {
     SavedD3D11BackBuffer = nullptr;
 
     if (!isDX12) {
-        SwapchainHook::swapchain->GetBuffer(0, IID_PPV_ARGS(SavedD3D11BackBuffer.put()));
+        if (!swapchain || FAILED(SwapchainHook::swapchain->GetBuffer(0, IID_PPV_ARGS(SavedD3D11BackBuffer.put()))) || !SavedD3D11BackBuffer) {
+            return;
+        }
 
         if (FlarialGUI::needsBackBuffer && !backbufferStorage.empty() && !backbufferStorageUnderUI.empty()) {
             if (underui) {
-                // Use underUI storage for frames without UI
                 auto& currentStorage = backbufferStorageUnderUI[currentBackbufferIndexUnderUI];
-
-                if (UnderUIHooks::bgfxCtx && UnderUIHooks::bgfxCtx->m_msaart) {
-                    context->ResolveSubresource(currentStorage.texture.get(), 0, UnderUIHooks::bgfxCtx->m_msaart, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
-                } else {
-                    context->CopyResource(currentStorage.texture.get(), SavedD3D11BackBuffer.get());
+                if (!TryCopyTexture(SavedD3D11BackBuffer.get(), currentStorage.texture.get())) {
+                    return;
                 }
 
                 currentBackbufferIndexUnderUI = (currentBackbufferIndexUnderUI + 1) % backbufferStorageUnderUI.size();
-                // Track that we have valid frame data in this storage
                 if (validBackbufferFramesUnderUI < static_cast<int>(backbufferStorageUnderUI.size())) {
                     validBackbufferFramesUnderUI++;
                 }
             } else {
 
                 auto& currentStorage = backbufferStorage[currentBackbufferIndex];
-                context->CopyResource(currentStorage.texture.get(), SavedD3D11BackBuffer.get());
+                if (!TryCopyTexture(SavedD3D11BackBuffer.get(), currentStorage.texture.get())) {
+                    return;
+                }
+
                 currentBackbufferIndex = (currentBackbufferIndex + 1) % backbufferStorage.size();
-                // Track that we have valid frame data in this storage
                 if (validBackbufferFrames < static_cast<int>(backbufferStorage.size())) {
                     validBackbufferFrames++;
                 }
@@ -591,19 +656,12 @@ void SwapchainHook::SaveBackbuffer(bool underui) {
                 localExtraBuffer = ExtraSavedD3D11BackBuffer;
             }
 
-            // Perform GPU operations with local copy (outside mutex to avoid blocking)
-            if (localExtraBuffer) {
-                if (underui) {
-                    if (UnderUIHooks::bgfxCtx && UnderUIHooks::bgfxCtx->m_msaart) {
-                        context->ResolveSubresource(localExtraBuffer.get(), 0, UnderUIHooks::bgfxCtx->m_msaart, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
-                    } else {
-                        context->CopyResource(localExtraBuffer.get(), SavedD3D11BackBuffer.get());
+                if (localExtraBuffer) {
+                    if (!TryCopyTexture(SavedD3D11BackBuffer.get(), localExtraBuffer.get())) {
+                        return;
                     }
-                } else {
-                    context->CopyResource(localExtraBuffer.get(), SavedD3D11BackBuffer.get());
                 }
             }
-        }
     } else {
         HRESULT hr = D3D11Resources[currentBitmap]->QueryInterface(IID_PPV_ARGS(SavedD3D11BackBuffer.put()));
         if (FAILED(hr)) {

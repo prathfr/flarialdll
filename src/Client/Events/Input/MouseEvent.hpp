@@ -27,7 +27,6 @@ private:
 public:
     MouseEvent(char button, char action, short mouseX, short mouseY, short MouseMovementX, short MouseMovementY) : Event() {
         this->button = (MouseButton) button;
-        this->action = (MouseAction) action;
         this->setActionFromChar(action);
         this->actionRaw = action;
         this->mouseX = mouseX;
@@ -67,10 +66,14 @@ public:
     }
 
     void setActionFromChar(char newAction) {
-        switch (newAction) {
+        // Cast to unsigned to fix signed char comparison (0x80 = -128 signed != 128 unsigned)
+        const auto raw = static_cast<unsigned char>(newAction);
+        switch (raw) {
             case 0: this->action = MouseAction::Release;
                 break;
             case 1: this->action = MouseAction::Press;
+                break;
+            case 2: this->action = MouseAction::Press;
                 break;
             case 0x7F:
             case 0x78: this->action = MouseAction::ScrollUp;
@@ -78,7 +81,7 @@ public:
             case 0x80:
             case 0x88: this->action = MouseAction::ScrollDown;
                 break;
-            default: this->action = (MouseAction) newAction;
+            default: this->action = (MouseAction) raw;
                 break;
         }
     }

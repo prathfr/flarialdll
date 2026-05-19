@@ -5,10 +5,10 @@
 
 class HudCursorRendererHook : public Hook {
 private:
-    static void* HudCursorRenderer_renderCallback(class HudCursorRenderer *_this, class MinecraftUIRenderContext *renderContext, class IClientInstance *client, class UIControl *owner, int pass, class RectangleArea *renderAABB);
+    static void __fastcall HudCursorRenderer_renderCallback(class HudCursorRenderer *_this, class MinecraftUIRenderContext *renderContext, class IClientInstance *client, class UIControl *owner, int pass);
 
 public:
-    typedef void*(__thiscall *original)(class HudCursorRenderer *_this, class MinecraftUIRenderContext *renderContext, class IClientInstance *client, class UIControl *owner, int pass, class RectangleArea *renderAABB);
+    typedef void(__fastcall *original)(class HudCursorRenderer *_this, class MinecraftUIRenderContext *renderContext, class IClientInstance *client, class UIControl *owner, int pass);
 
     static inline original funcOriginal = nullptr;
 

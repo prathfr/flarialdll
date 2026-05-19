@@ -8,6 +8,7 @@
 #include "Client.hpp"
 #include "Modules/Nick/NickModule.hpp"
 #include "Utils/APIUtils.hpp"
+#include "MaterialBinLoaderState.hpp"
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -15,6 +16,7 @@
 class ClientInstanceUpdateHook : public Hook {
 private:
     static void Update(ClientInstance* client, bool a2) {
+        MaterialBinLoaderState::captureResourcePackManager(client);
         return funcOriginal(client, a2);
     }
 

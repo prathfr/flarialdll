@@ -1,6 +1,7 @@
 #include "../../../../../Module/Modules/ClickGUI/Elements/ClickGUIElements.hpp"
 #include "../../../../../../Assets/Assets.hpp"
 #include "../../../../../Module/Modules/ClickGUI/ClickGUI.hpp"
+#include <Scripting/ScriptManager.hpp>
 #include "../Utils/WinrtUtils.hpp"
 #include "Utils/UserActionLogger.hpp"
 
@@ -249,8 +250,11 @@ void ClickGUIElements::ModCard(float x, float y, Module *mod, int iconId, const 
                                   round.x)) {
         if (ClickGUI::baseHeightActual > 0.6f) {
             bool newState = !mod->settings.getSettingByName<bool>("enabled")->value;
+            auto targetModule = mod->isScripting()
+                ? ScriptManager::getModuleByName(ScriptManager::getLoadedModules(), mod->name)
+                : ModuleManager::getModule(mod->name);
             // Queue the toggle to be processed outside of the render callback to avoid deadlock
-            ModuleManager::queueToggle(ModuleManager::getModule(mod->name), newState);
+            ModuleManager::queueToggle(targetModule, newState);
         }
     }
 

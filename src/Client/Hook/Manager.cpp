@@ -23,6 +23,8 @@
 #include "Hooks/Render/ItemRendererRenderGroupHook.hpp"
 #include "Hooks/Game/getSensHook.hpp"
 #include "Hooks/Game/ContainerScreenControllerHook.hpp"
+#include "Hooks/Game/BindActionToKeyboardAndMouseInputHook.hpp"
+#include "Hooks/Game/KeyboardKeyOptionApplyHook.hpp"
 #include "Hooks/Render/TextureGroup_getTextureHook.hpp"
 #include "Hooks/Render/HudMobEffectsRenderer.hpp"
 #include "Hooks/Visual/BaseActorRendererRenderTextHook.hpp"
@@ -70,6 +72,8 @@
 #include "Hooks/Game/ClientInstanceUpdate.hpp"
 #include "Hooks/Game/ParseThirdPartyServersHook.hpp"
 #include "Hooks/Render/BoneTransformHook.hpp"
+//#include "Hooks/Game/TestHook.hpp"
+// #include "Hooks/Game/TestHook.hpp"
 
 std::vector<std::shared_ptr<Hook>> HookManager::hooks;
 
@@ -122,97 +126,134 @@ void HookManager::initialize()
     {
         addHook<TextureGroup_getTextureHook>();
     }
-    addHook<getViewPerspectiveHook>();
-    addHook<RaknetTickHook>();
-    addHook<SetUpAndRenderHook>();
-    addHook<GameModeAttackHook>();
-
-    addHook<getFovHook>();
-    addHook<displayClientMessageHook>();
-    addHook<ActorBaseTick>();
-    addHook<OnSuspendHook>();
-    addHook<OnDeviceLostHook>();
-    addHook<getGammaHook>();
-    if (!VersionUtils::checkAboveOrEqual(21, 120)) addHook<FontDrawTransformedHook>();
-    if (VersionUtils::checkAboveOrEqual(21, 130)) addHook<HurtColorHook>();
-    addHook<ColorFormatHook>();
-    addHook<DimensionFogColorHook>();
-    addHook<OverworldFogColorHook>();
-    addHook<TimeChangerHook>();
-    addHook<ItemRendererRenderGroupHook>();
-    addHook<SendPacketHook>();
-    addHook<ApplyTurnDeltaHook>();
-    //addHook<AnimationComponent_playAnimation>();
-    if (VersionUtils::checkBelow(21, 80)) {
-        addHook<getSensHook>(); // Sensitivity is now handled in ApplyTurnDeltaHook (for .80+)
-    }
-    addHook<HudMobEffectsRendererHook>();
-    if (VersionUtils::checkAboveOrEqual(20, 60))
-    {
-        // due to texture group offset
+	if (VersionUtils::checkAboveOrEqual(26, 0)) {
+		// === 1.26.x HOOK SET ===
+		// Hooks with verified sigs. Hooks that use broken/duplicate sigs are disabled.
+		addHook<getViewPerspectiveHook>();
+		addHook<RaknetTickHook>();
+		addHook<SetUpAndRenderHook>();
+        addHook<OnSuspendHook>();
+        addHook<OnDeviceLostHook>();
+        addHook<ApplyTurnDeltaHook>();
+        addHook<HudMobEffectsRendererHook>();
         addHook<HudCursorRendererHook>();
-        addHook<BaseActorRendererRenderTextHook>();
-
-        addHook<TickingTextureStageRenderHook>(); // due to mv
-    }
-    addHook<UIControl_updateCachedPositionHook>();
-
-    if (VersionUtils::checkAboveOrEqual(21, 40))
-    {
+        addHook<BaseActorRendererRenderTextHook>(); // 1.26.x: ABI changed — Font* moved from arg4 to arg5, version-gated in enableHook
+        addHook<UIControl_updateCachedPositionHook>();
         addHook<ContainerScreenControllerHook>();
-    }
-
-    addHook<_composeFullStackHook>();
-
-    // packchanger hooks
-    if (!VersionUtils::checkAboveOrEqual(21, 60))
-    {
-        addHook<isPreGameHook>();
-
-        addHook<RenderOrderExecuteHook>();
-        addHook<RenderChunkCoordinatorHandleVisibilityUpdatesHook>();
-        addHook<SettingsScreenOnExitHook>();
-        addHook<GeneralSettingsScreenControllerCtorHook>();
-    }
-
+        addHook<_composeFullStackHook>();
         addHook<ItemInHandRendererRenderItem>();
-
-    addHook<RenderOutlineSelectionHook>();
-    addHook<getTimeOfDayHook>();
-
-    addHook<BobHurtHook>();
-    addHook<RenderLevelHook>();
-    addHook<TintColorHook>();
-    addHook<ActorShaderParamsHook>();
-    addHook<ChatScreenControllerHook>();
-    addHook<HudScreenControllerHook>();
-    //addHook<Level_addParticleEffect>();
-    //addHook<Level_sendServerLegacyParticle>();
-    addHook<SoundEnginePlayHook>();
-    addHook<getCurrentSwingDurationHook>();
-    addHook<ActorDropItem>();
-    addHook<InventoryAddItem>();
-    if (VersionUtils::checkAboveOrEqual(21, 40))
-    {
+        addHook<RenderOutlineSelectionHook>();
+        addHook<RenderLevelHook>();
+        addHook<ChatScreenControllerHook>();
+        addHook<HudScreenControllerHook>();
+        addHook<BindActionToKeyboardAndMouseInputHook>();
+        addHook<KeyboardKeyOptionApplyHook>();
+        addHook<SettingsScreenOnExitHook>();
         addHook<UpdatePlayerHook>();
-    }
-
-    if (VersionUtils::checkAboveOrEqual(21, 50))
-    {
         addHook<ReadFileHook>();
-    }
 
-    // Better Inventory hooks (1.21.130+)
-    if (VersionUtils::checkAboveOrEqual(21, 130))
-    {
-        // TODO: Re-enable when hook classes are restored in BetterInventory port refactor.
-        // addHook<FlyingItemRendererHook>();
-        // addHook<IconBlitMultiColorHook>();
-    }
-
-    if (VersionUtils::checkAboveOrEqual(21, 130)) {
-        addHook<BgfxFrameExtractorInsertHook>();
+        // 1.21.130+ hooks with verified sigs
         addHook<BoneTransformHook>();
+        //addHook<TestHook>();
+
+        // Re-enabled for 1.26.x (sigs found/verified 2026-03-27):
+        addHook<ActorDropItem>();
+        addHook<InventoryAddItem>();
+        addHook<ItemRendererRenderGroupHook>();
+        addHook<TickingTextureStageRenderHook>();
+        addHook<ColorFormatHook>();
+        addHook<DimensionFogColorHook>();
+        addHook<OverworldFogColorHook>();
+        addHook<TimeChangerHook>();
+        addHook<SoundEnginePlayHook>();
+        addHook<getCurrentSwingDurationHook>();
+        addHook<ActorShaderParamsHook>(); // 1.26.10: function grew to 16 params (lightEmission split into lightLevel + lightColorOverride)
+        // addHook<BobHurtHook>(); // TODO: crashes with no Flarial frames — sig may match wrong function in 1.26.10
+
+        // Core gameplay hooks (sigs found/verified 2026-03-27):
+        addHook<ActorBaseTick>();
+        addHook<GameModeAttackHook>();
+        addHook<getFovHook>();
+        addHook<displayClientMessageHook>();
+        addHook<getGammaHook>();
+        addHook<SendPacketHook>();
+        addHook<getTimeOfDayHook>();
+
+        addHook<BgfxFrameExtractorInsertHook>();
+        // HurtColor: pipeline restructured in 1.26.x — now handled by BgfxFrameExtractor hooks above
+        // TintColor: hook body commented out upstream, no sig needed until re-enabled
+    } else {
+        // === Pre-1.26.x FULL HOOK SET ===
+        addHook<getViewPerspectiveHook>();
+        addHook<RaknetTickHook>();
+		// addHook<SetUpAndRenderHook>();
+        addHook<GameModeAttackHook>();
+        addHook<getFovHook>();
+        addHook<displayClientMessageHook>();
+        addHook<ActorBaseTick>();
+        addHook<OnSuspendHook>();
+        addHook<OnDeviceLostHook>();
+        addHook<getGammaHook>();
+        if (!VersionUtils::checkAboveOrEqual(21, 120)) addHook<FontDrawTransformedHook>();
+        if (VersionUtils::checkAboveOrEqual(21, 130)) addHook<HurtColorHook>();
+        addHook<ColorFormatHook>();
+        addHook<DimensionFogColorHook>();
+        addHook<OverworldFogColorHook>();
+        addHook<TimeChangerHook>();
+        addHook<ItemRendererRenderGroupHook>();
+        addHook<SendPacketHook>();
+        addHook<ApplyTurnDeltaHook>();
+        if (VersionUtils::checkBelow(21, 80)) {
+            addHook<getSensHook>();
+        }
+        addHook<HudMobEffectsRendererHook>();
+        if (VersionUtils::checkAboveOrEqual(20, 60))
+        {
+            addHook<HudCursorRendererHook>();
+            addHook<BaseActorRendererRenderTextHook>();
+            addHook<TickingTextureStageRenderHook>();
+        }
+        addHook<UIControl_updateCachedPositionHook>();
+        if (VersionUtils::checkAboveOrEqual(21, 40))
+        {
+            addHook<ContainerScreenControllerHook>();
+        }
+        addHook<_composeFullStackHook>();
+        if (!VersionUtils::checkAboveOrEqual(21, 60))
+        {
+            addHook<isPreGameHook>();
+            addHook<RenderOrderExecuteHook>();
+            addHook<RenderChunkCoordinatorHandleVisibilityUpdatesHook>();
+            addHook<SettingsScreenOnExitHook>();
+            addHook<GeneralSettingsScreenControllerCtorHook>();
+        }
+        addHook<ItemInHandRendererRenderItem>();
+        addHook<RenderOutlineSelectionHook>();
+        addHook<getTimeOfDayHook>();
+        addHook<BobHurtHook>();
+        addHook<RenderLevelHook>();
+        addHook<TintColorHook>();
+        addHook<ActorShaderParamsHook>();
+        addHook<ChatScreenControllerHook>();
+        addHook<HudScreenControllerHook>();
+        addHook<SoundEnginePlayHook>();
+        addHook<getCurrentSwingDurationHook>();
+        addHook<ActorDropItem>();
+        addHook<InventoryAddItem>();
+        if (VersionUtils::checkAboveOrEqual(21, 40))
+            addHook<UpdatePlayerHook>();
+        if (VersionUtils::checkAboveOrEqual(21, 50))
+            addHook<ReadFileHook>();
+        if (VersionUtils::checkAboveOrEqual(21, 130) && !VersionUtils::checkAboveOrEqual(26, 0))
+
+        if (VersionUtils::checkAboveOrEqual(21, 130)) {
+            addHook<BgfxFrameExtractorInsertHook>();
+            addHook<BoneTransformHook>();
+            //addHook<TestHook>();
+        }
+        if (VersionUtils::checkAboveOrEqual(21, 130))
+        {
+        }
     }
 
 #ifdef __DEBUG__

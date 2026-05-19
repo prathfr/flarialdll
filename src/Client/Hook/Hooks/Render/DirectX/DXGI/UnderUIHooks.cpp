@@ -31,7 +31,6 @@ void UnderUIHooks::callBackRenderContextD3D11Submit(
 
     // NOTE: Panorama shader rendering is now handled via compositing at Present time.
     // This hook is kept for other potential uses but does NOT render the panorama shader.
-    // The compositing approach in PanoramaShader::onRender() handles rendering correctly.
 
     funcoriginalRenderContextD3D11Submit(a1, a2, a3, a4);
 }

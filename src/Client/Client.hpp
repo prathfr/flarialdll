@@ -14,7 +14,7 @@ class WindowManager;
 class InitializationManager;
 
 #define ADD_SETTING(setting, value) \
-if (Client::settings.getSettingByName<decltype(value)>(setting) == nullptr) \
+if (!Client::settings.hasSetting(setting)) \
 Client::settings.addSetting(setting, value);
 
 namespace fs = std::filesystem;

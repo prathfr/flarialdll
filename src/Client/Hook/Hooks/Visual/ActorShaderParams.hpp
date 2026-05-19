@@ -21,8 +21,9 @@ private:
         void *uvRot2,
         void **glintUVScale,
         void *uvAnim,
-        float brightness, 
-        void *lightEmission
+        float brightness,
+        uint8_t lightLevel,
+        void *lightColorOverride
     );
 
 public:
@@ -41,7 +42,8 @@ public:
         void **glintUVScale,
         void *uvAnim,
         float brightness,
-        void *lightEmission
+        uint8_t lightLevel,
+        void *lightColorOverride
     );
 
     static inline ActorShaderParamsOriginal funcOriginal = nullptr;

@@ -22,6 +22,7 @@ public:
     }
 
     void setArea(RectangleArea newArea) {
+        if (!this->area) return;
         *this->area = newArea;
     }
 };

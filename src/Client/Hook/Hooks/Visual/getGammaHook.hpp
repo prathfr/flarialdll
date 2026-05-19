@@ -11,7 +11,7 @@ private:
     static float getGammaCallback(uintptr_t a1);
 
 public:
-    typedef float (__thiscall *getGammaOriginal)(uintptr_t);
+    typedef float (__fastcall *getGammaOriginal)(uintptr_t);
 
     static inline getGammaOriginal funcOriginal = nullptr;
 

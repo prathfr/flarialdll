@@ -740,12 +740,12 @@ ImVec2 FlarialGUI::getFlarialTextSize(const wchar_t* text, const float width, co
 
 	float guiScale = Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value;
 
-	// Check if font scale is out of bounds (0.5 - 2.0) and reset to 1.0 if needed
-	if (guiScale < 0.5f || guiScale > 2.0f) {
-		guiScale = 1.0f;
-		Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value = 1.0f;
-		Client::SavePrivate();
-	}
+    // Check if font scale is out of bounds (0.5 - 2.0) and reset to 1.0 if needed.
+    // Do not save from this hot render path; it can be hit hundreds of times during startup.
+    if (guiScale < 0.5f || guiScale > 2.0f) {
+        guiScale = 1.0f;
+        Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value = 1.0f;
+    }
 
 	float targetFontSize = (fontSize * guiScale) * 0.18f;
 
@@ -838,12 +838,12 @@ std::string FlarialGUI::FlarialTextWithFont(float x, float y, const wchar_t* tex
 
 	float guiScale = Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value;
 
-	// Check if font scale is out of bounds (0.5 - 2.0) and reset to 1.0 if needed
-	if (guiScale < 0.5f || guiScale > 2.0f) {
-		guiScale = 1.0f;
-		Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value = 1.0f;
-		Client::SavePrivate();
-	}
+    // Check if font scale is out of bounds (0.5 - 2.0) and reset to 1.0 if needed.
+    // Do not save from this hot render path; it can be hit hundreds of times during startup.
+    if (guiScale < 0.5f || guiScale > 2.0f) {
+        guiScale = 1.0f;
+        Client::settings.getSettingByName<float>(moduleFont ? "modules_font_scale" : "gui_font_scale")->value = 1.0f;
+    }
 
 	float targetFontSize = (fontSize * guiScale) * 0.18f;
 

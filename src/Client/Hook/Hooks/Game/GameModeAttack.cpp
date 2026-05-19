@@ -12,14 +12,14 @@ void GameModeAttackHook::callback(Gamemode *gamemode, Actor *actor) {
     ((original)funcOriginal)(gamemode, actor);
 }
 
-void GameModeAttackHook::callback1_21_50(Gamemode *gamemode, Actor *actor, bool a3) {
+bool GameModeAttackHook::callback1_21_50(Gamemode *gamemode, Actor *actor, bool a3) {
     if (SDK::clientInstance && SDK::clientInstance->getLocalPlayer() != nullptr) {
         if (SDK::clientInstance->getLocalPlayer() == gamemode->getPlayer()) {
             auto event = nes::make_holder<AttackEvent>(actor);
             eventMgr.trigger(event);
         }
     }
-    ((original1_21_50)funcOriginal)(gamemode, actor, a3);
+    return ((original1_21_50)funcOriginal)(gamemode, actor, a3);
 }
 
 

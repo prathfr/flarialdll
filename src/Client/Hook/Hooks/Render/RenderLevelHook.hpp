@@ -5,10 +5,10 @@
 
 class RenderLevelHook : public Hook {
 private:
-    static void RenderLevelCallback(LevelRender* level, ScreenContext* scn, void* a3);
+    static void __fastcall RenderLevelCallback(LevelRender* level, ScreenContext* scn, void* a3);
 
 public:
-    typedef void(__thiscall *original)(LevelRender* level, ScreenContext* scn, void* a3);
+    typedef void(__fastcall *original)(LevelRender* level, ScreenContext* scn, void* a3);
 
     static inline original funcOriginal = nullptr;
 

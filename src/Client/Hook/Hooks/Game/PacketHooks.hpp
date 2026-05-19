@@ -10,7 +10,7 @@ class SendPacketHook : public Hook {
 private:
     static void setVariables(void *packetHandlerDispatcher, void *networkIdentifier, void *netEventCallback);
 
-    static void callback(LoopbackPacketSender *pSender, Packet *pPacket);
+    static void callback(LoopbackPacketSender *pSender, Packet *pPacket, void *a3, void *a4);
 
     static void receiveCallbackText(void *packetHandlerDispatcher, void *networkIdentifier, void *netEventCallback,
                                     const std::shared_ptr<Packet>& packet);
@@ -57,7 +57,7 @@ public:
     static inline void* PacketHandlerDispatcher;
     static inline void* NetEventCallback;
 
-    typedef void(__thiscall *original)(LoopbackPacketSender *, Packet *);
+    typedef void(__thiscall *original)(LoopbackPacketSender *, Packet *, void *, void *);
 
     typedef void(__thiscall *receive)(void *packetHandlerDispatcher, void *networkIdentifier, void *netEventCallback,
                                       std::shared_ptr<Packet> packet);

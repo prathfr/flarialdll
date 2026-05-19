@@ -5,16 +5,15 @@
 
 class ContainerScreenControllerHook : public Hook {
 private:
-    static int64_t ContainerScreenController__onContainerSlotHovered(ContainerScreenController *_this, const std::string* collectionName, int64_t slot) {
+    static int64_t ContainerScreenController__onContainerSlotHovered(ContainerScreenController *_this, const std::string& collectionName, int slot) {
 
-        auto event = nes::make_holder<ContainerSlotHoveredEvent>(*collectionName, slot, _this);
+        auto event = nes::make_holder<ContainerSlotHoveredEvent>(collectionName, slot, _this);
         eventMgr.trigger(event);
 
         return funcOriginal0(_this, collectionName, slot);
     }
 
     static uint32_t ContainerScreenController__tick(ContainerScreenController *_this) {
-
         auto event = nes::make_holder<ContainerScreenControllerTickEvent>(_this);
         eventMgr.trigger(event);
 
@@ -22,7 +21,7 @@ private:
     }
 
 public:
-    typedef int64_t(__thiscall *original0)(ContainerScreenController *, const std::string*, int64_t);
+    typedef int64_t(__thiscall *original0)(ContainerScreenController *, const std::string&, int);
 
     static inline original0 funcOriginal0 = nullptr;
 

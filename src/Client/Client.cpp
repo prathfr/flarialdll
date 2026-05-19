@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <thread>
+#include <fstream>
+#include <sstream>
 
 #include <Utils/VersionUtils.hpp>
 #include <Utils/WinrtUtils.hpp>
@@ -11,6 +13,7 @@
 #include <Utils/ShellMessageUtil.hpp>
 
 #include "Command/CommandManager.hpp"
+#include "UI/CohtmlBridge.hpp"
 
 #include <winrt/Windows.UI.Core.h>
 #include <winrt/Windows.Foundation.h>
@@ -25,6 +28,27 @@ namespace winrt
     using namespace Windows::Foundation;
     using namespace Windows::ApplicationModel::Activation;
     using namespace Windows::ApplicationModel::Core;
+}
+
+namespace {
+    bool fileNeedsSeeding(const std::string& path) {
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec)) return true;
+        if (std::filesystem::is_empty(path, ec)) return true;
+
+        std::ifstream file(path);
+        if (!file.is_open()) return true;
+
+        std::stringstream ss;
+        ss << file.rdbuf();
+        std::string content = ss.str();
+
+        content.erase(std::remove_if(content.begin(), content.end(), [](unsigned char c) {
+            return std::isspace(c) != 0;
+        }), content.end());
+
+        return content.empty() || content == "null" || content == "{}";
+    }
 }
 
 #include <Scripting/ScriptManager.hpp>
@@ -388,9 +412,12 @@ void Client::initialize()
         playersList = buffer.str();
         file.close();
 
-        APIUtils::onlineUsers = APIUtils::ListToVector(playersList);
-        APIUtils::onlineUsersSet = APIUtils::onlineUsers | std::ranges::to<decltype(
-            APIUtils::onlineUsersSet)>();
+        {
+            std::unique_lock lock(APIUtils::rolesMutex);
+            APIUtils::onlineUsers = APIUtils::ListToVector(playersList);
+            APIUtils::onlineUsersSet = APIUtils::onlineUsers | std::ranges::to<decltype(
+                APIUtils::onlineUsersSet)>();
+        }
     });
 
     updateThread.detach();
@@ -447,6 +474,9 @@ void Client::initialize()
     ADD_SETTING("noicons", false);
     ADD_SETTING("noshadows", false);
     ADD_SETTING("watermark", true);
+    ADD_SETTING("watermarkAnchor", std::string("Bottom Center"));
+    ADD_SETTING("watermarkFlyFromBottom", false);
+    ADD_SETTING("watermarkAnimSpeed", 2.0f);
     ADD_SETTING("centreCursor", false);
     ADD_SETTING("aliasingMode", std::string("Default"));
     ADD_SETTING("ejectKeybind", std::string(""));
@@ -511,6 +541,19 @@ void Client::initialize()
 
     ModuleManager::initialize();
 
+    try {
+        if (fileNeedsSeeding(path)) {
+            SaveSettings();
+        }
+
+        const auto privatePath = Utils::getConfigsPath() + "\\PRIVATE";
+        if (fileNeedsSeeding(privatePath)) {
+            SavePrivate();
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        LOG_ERROR("Failed to seed default config files: {}", e.what());
+    }
+
     CommandManager::initialize();
 
     ScriptManager::initialize();
@@ -518,6 +561,8 @@ void Client::initialize()
     PerformPostLegacySetup();
     init = true;
     initMgr.setInitialized(true);
+
+    flarial::cohtml::initialize();
 }
 
 // Forward to InitializationManager

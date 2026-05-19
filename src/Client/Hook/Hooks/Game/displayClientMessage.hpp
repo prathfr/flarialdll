@@ -1,20 +1,21 @@
 #pragma once
 
 #include "../Hook.hpp"
+#include "../../../../SDK/Client/Render/GuiData.hpp"
 #include "../../../../Utils/Memory/Game/SignatureAndOffsetManager.hpp"
 
 class displayClientMessageHook : public Hook {
 private:
-    static void displayClientMessageDetour(GuiData* guidata, const std::string& message, char* c, bool b) {
+    static __int64 __fastcall displayClientMessageDetour(GuiData* guidata, const std::string& message, const GuiMessageParams* params, bool showNow) {
 
         auto event = nes::make_holder<displayClientMessageEvent>(message);
         eventMgr.trigger(event);
         
-        func(guidata, message, c, b);
+        return func(guidata, message, params, showNow);
     }
 
 public:
-    typedef void(__thiscall* original)(GuiData*, const std::string&, char*, bool);
+    typedef __int64(__fastcall* original)(GuiData*, const std::string&, const GuiMessageParams*, bool);
 
     static inline original func = nullptr;
 

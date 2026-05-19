@@ -5,6 +5,12 @@
 
 class UpdateCameraHook : public Hook
 {
+public:
+    // Cached matrices for WorldToScreen — updated each frame from CameraComponent
+    static inline glm::mat4 cachedProjection{1.f};
+    static inline glm::mat4 cachedModelView{1.f};
+    static inline bool matricesValid = false;
+
 private:
     static void* updateCameraCallback(MinecraftCamera::CameraComponent* cam, void* idk, void* idk2)
     {
@@ -27,7 +33,14 @@ private:
         cam->mSavedProjection = event->savedProjection;
         cam->mSavedModelView = event->savedModelView;
 
-        return funcOriginal(cam, idk, idk2);
+        auto result = funcOriginal(cam, idk, idk2);
+
+        // Cache the final matrices after the game computes them
+        cachedProjection = cam->mSavedProjection;
+        cachedModelView = cam->mSavedModelView;
+        matricesValid = true;
+
+        return result;
     };
 
 public:

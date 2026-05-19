@@ -3,6 +3,7 @@
 #include "Events/Game/SoundEnginePlayEvent.hpp"
 
 uint64_t SoundEnginePlayHook::callback(void* SoundEngine, const std::string& name, Vec3<float> pos, float volume, float a5) {
+  lastSoundEngine = SoundEngine;
   auto event = nes::make_holder<SoundEnginePlayEvent>(name, pos, volume, a5);
   eventMgr.trigger(event);
 

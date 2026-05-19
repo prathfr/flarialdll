@@ -1,7 +1,8 @@
 #include "PacketHooks.hpp"
 
 // text
-void SendPacketHook::callback(LoopbackPacketSender *pSender, Packet *pPacket) {
+void SendPacketHook::callback(LoopbackPacketSender *pSender, Packet *pPacket, void *a3, void *a4) {
+
     auto event = nes::make_holder<PacketSendEvent>(pPacket);
 
     if(SDK::clientInstance) {
@@ -9,7 +10,7 @@ void SendPacketHook::callback(LoopbackPacketSender *pSender, Packet *pPacket) {
     }
 
     if (!event->isCancelled()) {
-        sendPacketOriginal(pSender, pPacket);
+        sendPacketOriginal(pSender, pPacket, a3, a4);
     }
 }
 
@@ -150,6 +151,12 @@ void SendPacketHook::enableHook() {
 
     // Use queued hooks to batch all packet hooks into a single thread suspend/resume
     std::shared_ptr<Packet> textPacket = SDK::createPacket((int) MinecraftPacketIds::Text);
+    if (!textPacket) {
+        Logger::warn("createPacket sig not found, skipping packet hooks");
+        this->autoHook((void *) callback, (void **) &sendPacketOriginal);
+        Memory::applyQueuedHooks();
+        return;
+    }
     Memory::hookFuncQueued((void *) textPacket->packetHandler->vTable[1], (void*)receiveCallbackText,
                      (void **) &receiveTextPacketOriginal, "Text ReceivePacketHook");
 

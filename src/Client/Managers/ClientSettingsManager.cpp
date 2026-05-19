@@ -211,6 +211,7 @@ void ClientSettingsManager::saveSettings() {
             if (module == nullptr) continue;
 
             try {
+                module->getKeybind();
                 std::string moduleSettingsStr = module->settings.ToJson();
                 if (!moduleSettingsStr.empty()) {
                     nlohmann::json moduleSettings = nlohmann::json::parse(moduleSettingsStr);
@@ -331,6 +332,7 @@ void ClientSettingsManager::checkSettingsFile() {
             LOG_ERROR("Failed to create PRIVATE: {}", GetLastError());
         } else {
             priv.close();
+            privateInit_ = true;
         }
     } else {
         privateInit_ = true;

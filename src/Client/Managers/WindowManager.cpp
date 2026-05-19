@@ -51,8 +51,11 @@ void WindowManager::centerCursor() {
 
     if (!centreCursorSetting || !centreCursorSetting->value) return;
 
-    if (s_hWnd == nullptr) {
-        s_hWnd = FindWindowW(nullptr, L"Minecraft");
+    if (window_ && IsWindow(window_)) {
+        s_hWnd = window_;
+    } else if (s_hWnd == nullptr || !IsWindow(s_hWnd)) {
+        findGameWindow();
+        s_hWnd = window_;
     }
 
     if (s_hWnd != nullptr) {
@@ -77,14 +80,12 @@ void WindowManager::centerCursor() {
         std::string currentScreen = SDK::getCurrentScreen();
         if ((currentScreen != "hud_screen" && s_inHudScreen) ||
             (currentScreen == "hud_screen" && !s_inHudScreen)) {
-            GetWindowRect(s_hWnd, &s_currentRect);
             GetClientRect(s_hWnd, &s_clientRect);
+            POINT clientOrigin{0, 0};
+            ClientToScreen(s_hWnd, &clientOrigin);
 
-            int windowX = s_currentRect.left;
-            int windowY = s_currentRect.top;
-
-            int centerX = windowX + (s_clientRect.right) / 2;
-            int centerY = windowY + (s_clientRect.bottom) / 2;
+            int centerX = clientOrigin.x + (s_clientRect.right) / 2;
+            int centerY = clientOrigin.y + (s_clientRect.bottom) / 2;
 
             SetCursorPos(centerX, centerY);
 
