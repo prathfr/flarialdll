@@ -11,6 +11,8 @@
 #include "Components/OnGroundFlagComponent.hpp"
 #include "EntityContext.hpp"
 
+#include <cstdint>
+
 template<typename Component>
 Component *Actor::tryGet(uintptr_t addr) {
     if (VersionUtils::checkAboveOrEqual(21, 00) || addr == 0) {
@@ -72,14 +74,18 @@ ActorCategory Actor::getCategories() {
 
 bool Actor::canSee(const Actor& actor) {
     using canSeeFunc = bool (__fastcall *)(Actor *, const Actor&);
-    static uintptr_t sig;
-    if (sig == NULL) {
-        if (!VersionUtils::checkAboveOrEqual(20, 40)) {
-            sig = GET_SIG_ADDRESS("Actor::canSee");
-        } else {
-            sig = Memory::offsetFromSig(GET_SIG_ADDRESS("Actor::canSee"), 1);
+    static uintptr_t sig = [] {
+        const auto matched = GET_SIG_ADDRESS("Actor::canSee");
+        if (!matched) return static_cast<uintptr_t>(0);
+
+        if (VersionUtils::checkAboveOrEqual(20, 40) && *reinterpret_cast<const uint8_t*>(matched) == 0xE8) {
+            return Memory::offsetFromSig(matched, 1);
         }
-    }
+
+        return matched;
+    }();
+    if (!sig) return true;
+
     static auto canSee = reinterpret_cast<canSeeFunc>(sig);
     return canSee(this, actor);
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 namespace glaiel::crashlogs {
     // Test crash scenarios for validating crash log output
     // WARNING: These functions will intentionally crash the application!
@@ -29,6 +31,13 @@ namespace glaiel::crashlogs {
         inline void test_illegal_instruction_crash() {
             void (*bad_func)() = (void(*)())0xDEADBEEF;
             bad_func(); // This will crash
+        }
+
+        // Trigger a DEP execute access violation by calling bytes from the stack
+        inline void test_dep_execute_crash() {
+            alignas(16) volatile unsigned char code[] = {0xC3}; // ret
+            auto func = reinterpret_cast<void(*)()>(const_cast<unsigned char*>(code));
+            func(); // This should crash with access-violation operation 8 on DEP-enabled stacks
         }
 
         // Trigger an access violation by writing to read-only memory
@@ -74,6 +83,9 @@ namespace glaiel::crashlogs {
                     break;
                 case 6:
                     test_pure_virtual_crash();
+                    break;
+                case 7:
+                    test_dep_execute_crash();
                     break;
                 default:
                     test_null_pointer_crash();

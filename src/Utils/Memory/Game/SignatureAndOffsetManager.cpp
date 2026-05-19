@@ -1,13 +1,14 @@
 #include "SignatureAndOffsetManager.hpp"
 
-#include <Utils/Memory/Memory.hpp>
+#include <Utils/Logger/Logger.hpp>
 #include <thread>
 #include <atomic>
+#include <vector>
 
 SignatureAndOffsetManager Mgr;
 
-void SignatureAndOffsetManager::addSignature(unsigned int hash, const char* sig, const char* name) {
-    sigs[hash] = { sig, name, 0 };
+void SignatureAndOffsetManager::addSignature(unsigned int hash, hat::signature_view sigView, const char* sig, const char* name) {
+    sigs[hash] = { sigView, sig, name, 0 };
 }
 
 void SignatureAndOffsetManager::removeSignature(unsigned int hash) {
@@ -54,7 +55,33 @@ void SignatureAndOffsetManager::scanAllSignatures() {
             if (i >= sigs.size()) break;  // No more work
 
             auto& sigPair = *(std::next(sigs.begin(), i));
-            sigPair.second.address = Memory::findSig(sigPair.second.signature, sigPair.second.name);
+            if (sigPair.second.signatureView.empty()) {
+                const auto parsed = hat::parse_signature(sigPair.second.signature);
+                if (!parsed.has_value()) {
+                    Logger::custom(fg(fmt::color::crimson), "Signatures", "Failed to parse signature: {} ", sigPair.second.name);
+                    sigPair.second.address = 0;
+                    continue;
+                }
+
+                const auto result = hat::find_pattern(parsed.value(), ".text");
+                if (!result.has_result()) {
+                    Logger::custom(fg(fmt::color::crimson), "Signatures", "Failed to find signature: {} ", sigPair.second.name);
+                    sigPair.second.address = 0;
+                    continue;
+                }
+
+                sigPair.second.address = reinterpret_cast<uintptr_t>(result.get());
+                continue;
+            }
+
+            const auto result = hat::find_pattern(sigPair.second.signatureView, ".text");
+            if (!result.has_result()) {
+                Logger::custom(fg(fmt::color::crimson), "Signatures", "Failed to find signature: {} ", sigPair.second.name);
+                sigPair.second.address = 0;
+                continue;
+            }
+
+            sigPair.second.address = reinterpret_cast<uintptr_t>(result.get());
         }
     };
 

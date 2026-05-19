@@ -103,4 +103,19 @@ private:
     }
 };
 
+struct AttributesComponentCLANG : AttributesComponent {
+    static constexpr hat::fixed_string type_name = "AttributesComponent";
+};
+
+static_assert(sizeof(AttributesComponentCLANG) == 88);
 static_assert(sizeof(AttributesComponent) == 88);
+
+template<>
+struct ComponentTypeName<AttributesComponent> {
+    static constexpr hat::fixed_string value = "struct AttributesComponent";
+};
+
+template<>
+struct ComponentClangType<AttributesComponent> {
+    using type = AttributesComponentCLANG;
+};

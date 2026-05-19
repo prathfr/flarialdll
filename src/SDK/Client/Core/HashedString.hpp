@@ -28,7 +28,7 @@ public:
         if (!this->text.empty()) {
             for (char c : this->text) {
                 _hash *= FNV_PRIME;
-                _hash ^= c;
+                _hash ^= static_cast<uint64_t>(c);
             }
         } else {
             _hash = 0;

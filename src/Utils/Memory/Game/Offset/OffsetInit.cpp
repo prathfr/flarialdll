@@ -4,6 +4,185 @@
 #include <Utils/Logger/Logger.hpp>
 #include <Utils/Memory/Game/SignatureAndOffsetManager.hpp>
 
+void OffsetInit::init2620() {
+    Logger::custom(fg(fmt::color::golden_rod), "Offsets", "Loading offsets for 1.26.20");
+
+    ADD_OFFSET("LevelRender::getLevelRendererPlayer", 0x478);
+    ADD_OFFSET("ChatScreenController::refreshChatMessages", 0xCA0);
+
+    ADD_OFFSET("GuiData::ScreenSize", 0x40);
+    ADD_OFFSET("GuiData::ScreenSizeScaled", 0x50);
+    ADD_OFFSET("GuiData::GuiScale", 0x5C);
+    ADD_OFFSET("GuiData::screenResRounded", 0x48);
+    ADD_OFFSET("GuiData::sliderAmount", 0x5C);
+    ADD_OFFSET("GuiData::scalingMultiplier", 0x60);
+
+    ADD_OFFSET("UIControl::LayerName", 0x20);
+    ADD_OFFSET("UIControl::sizeConstrains", 0x48);
+    ADD_OFFSET("UIControl::parentRelativePosition", 0x40);
+    ADD_OFFSET("UIControl::children", 0x98);
+
+    ADD_OFFSET("RaknetConnector::JoinedIp", 0x420);
+    ADD_OFFSET("RaknetConnector::RawIp", 0x400);
+    ADD_OFFSET("RaknetConnector::port", 0x464);
+
+    ADD_OFFSET("Attribute::Hunger", 2);
+    ADD_OFFSET("Attribute::Saturation", 3);
+    ADD_OFFSET("Attribute::PlayerLevel", 5);
+    ADD_OFFSET("Attribute::PlayerExperience", 6);
+    ADD_OFFSET("Attribute::Health", 7);
+
+    ADD_OFFSET("Block::blockLegacy", 0x68);
+
+
+    ADD_OFFSET("BlockLegacy::name", 0x90);
+    ADD_OFFSET("BlockLegacy::namespace", 0xB8);
+    ADD_OFFSET("BlockLegacy::mMapColor", 0x1A0);
+    ADD_OFFSET("BlockLegacy::mProperties", 0x128);
+    ADD_OFFSET("BlockLegacy::mLightEmission", 0x19D);
+    ADD_OFFSET("BlockLegacy::mDefaultState", 0x2C8);
+    ADD_OFFSET("MinecraftGame::textureGroup", 0x720);
+}
+
+void OffsetInit::init2610() {
+    Logger::custom(fg(fmt::color::golden_rod), "Offsets", "Loading offsets for 1.26.10");
+
+    ADD_OFFSET("MinecraftGame::gameRenderer", 0x9A0);
+    ADD_OFFSET("MinecraftGame::textureGroup", 0x7A0);
+    ADD_OFFSET("LevelRender::getLevelRendererPlayer", 0x448);
+
+    // Player struct layout changed from 1.21.x to 1.26.x — mName moved from 0xC18 to 0xBC0.
+    // Confirmed via runtime offset probe (IGN match at 0xBC0).
+    ADD_OFFSET("Player::playerName", 0xBC0);
+
+    // Block::blockLegacy shifted from 0x60 to 0x58 (8 bytes, one field removed before it).
+    // Confirmed: Block+0x58 is valid heap ptr, Block+0x60 was 0xa00000000 (garbage).
+    ADD_OFFSET("Block::blockLegacy", 0x58);
+
+    // BlockLegacy/BlockType internal layout shifted -0x28 in 1.26.10.
+    // Confirmed via probe: "air" at +0x80, "minecraft" at +0xA8, "minecraft:air" at +0xD0.
+    ADD_OFFSET("BlockLegacy::name", 0x80);             // was 0xA8
+    ADD_OFFSET("BlockLegacy::namespace", 0xA8);        // was 0xD0
+    ADD_OFFSET("BlockLegacy::mMapColor", 0x190);       // was 0x1B8 (-0x28)
+    ADD_OFFSET("BlockLegacy::mProperties", 0x118);     // was 0x140 (-0x28) in init21130, was 0x150 in init260
+    ADD_OFFSET("BlockLegacy::mLightEmission", 0x18D);  // was 0x17C (wrong -0x28 guess), confirmed via IDA: setLightEmission at 0x1466E3840 writes [a1+397], getLightEmission at 0x141265650 reads [a1+397]
+    ADD_OFFSET("BlockLegacy::mDefaultState", 0x2B8);   // was 0x2E0 (-0x28)
+
+    // LevelChunk struct shifted — mSubChunks moved, pushing brightness-related member
+    // from 0x158 (1.21.13x) to 0x148 (1.26.10).
+    ADD_OFFSET("LevelChunk::mSubChunks", 0x148);
+
+    // Pool Block structs are exactly 96 bytes (0x00-0x5F stride confirmed via sub_140510550),
+    // BlockLegacy::mLightEmission (0x18D) through block->getBlockLegacy() instead.
+    // The value 0x60 came from a copy-ctor stack write that targets the CALLER's separate
+    // stack variable (v19 at [rsp+90h]), not an in-band Block field.
+    ADD_OFFSET("Block::mEmissiveBrightness", 0x60);
+
+    // Level::mItemRegistry — ItemRegistryRef (std::weak_ptr<ItemRegistry>, 16 bytes) shifted
+    // from 0x198 (1.21.130) to 0x350 (1.26.10) due to Level struct growth.
+    // Confirmed via sub_1466746A0: reads *(a1+848) and *(a1+856) as a 2-qword weak_ptr,
+    // and is called from 4 Level vtable slots (const/non-const getItemRegistry overloads).
+    // Level::mItemRegistry — confirmed via CE runtime scan: Level+0x198 has a valid weak_ptr
+    // to ItemRegistry containing 1906 items (air, wooden_spear, etc.). The 0x350 offset from
+    // the 1.26.10 IDB was WRONG for 1.26.11 — it's actually unchanged from 1.21.130!
+    // Verified: item names readable through vector at ItemRegistry+0x30.
+    // ADD_OFFSET not needed here — inherited from init21130 at 0x198.
+
+    // Item string fields — shifted in 1.26.10 compared to 1.21.160.
+    // Confirmed via Item ctor (sub_1461F6500): "atlas.items" written to a1+16, description at a1+176.
+    ADD_OFFSET("Item::AtlasTextureFile", 0x10); // was 0xB0 in 1.21.160
+    ADD_OFFSET("Item::name", 0xD8);             // mDescriptionId, was 0xD8 in 1.21.160
+    // ItemRegistry map offsets: verified UNCHANGED from 1.21.130 via CE runtime scan.
+    // Level::mItemRegistry is also 0x198 (unchanged), NOT 0x350 (1.26.10 IDB was wrong for 1.26.11).
+    // Verified unchanged: mNameToItemMap=0x88, mTileItemNameToItemMap=0x108
+    // Verified unchanged: Item::mId=0xAA, mBlockType=0x178,
+    // LevelChunk::mMinY=0x64, LevelChunk::mPosition=0x78
+
+    // Verified unchanged: Actor::baseTickVft=25
+
+    // Dimension::weather — confirmed via /weather command handler (sub_145A066A0):
+    //   v9 = *(_QWORD*)(v8 + 456) where v8 is Dimension* → 456 = 0x1C8.
+    ADD_OFFSET("Dimension::weather", 0x1C8);
+
+    // Weather field offsets — confirmed via /weather command handler (sub_145A066A0):
+    //   *(float*)(v9 + 60) = rainLevel  → 60 = 0x3C
+    //   *(DWORD*)(v9 + 72) = 0          → 72 = 0x48, zeroed on clear (matches lightningLevel)
+    ADD_OFFSET("Weather::rainLevel", 0x3C);
+    ADD_OFFSET("Weather::lightningLevel", 0x48);
+
+    // Verified unchanged: Biome::temperature=0x08, Biome::name=0x198,
+    // Actor::level=0x1D8, Actor::categories=0x210, Actor::mActorRendererIdHash=0x1E0,
+    // Actor::mActorRendererIdStr=0x1E8, Actor::mAlias=0x1E8,
+    // PlayerInventory::SelectedSlot=0x10, PlayerInventory::inventory=0xB8, Inventory::getItem=7
+
+    // Actor::hurtTime — was 0x204, now 0x22C. Confirmed via vtable functions writing DWORD 10/3.
+    ADD_OFFSET("Actor::hurtTime", 0x22C);
+
+    // Player::playerInventory = 0x5B8 (PlayerInventory*, 8 bytes):
+    //   Previous agent incorrectly used 0x5D0 from vtable accessor sub_140D0AC40 (vt[275]),
+    //   but that accessor returns [a1+0x5D0] where a1 is NOT the Player* directly —
+    //   it's called on a different object type. The correct offset was found via the tutorial
+    //   signature pattern (48 8b 91 ?? ?? ?? ?? 80 ba ...) which yields 1464 = 0x5B8
+    //   across 10 independent call sites (e.g. sub_145F83BF0 @ 0x145F83BF4,
+    //   sub_145F83C90 @ 0x145F83C94, sub_1421753C0 @ 0x14217550c, and 7 more).
+    ADD_OFFSET("Player::playerInventory", 0x5B8);
+
+    // Player::gamemode = 0xAA0 (raw GameMode*, 8 bytes — first member of unique_ptr<GameMode>):
+    //   Previous agent got 0xA18 from vtable accessor sub_140D0AB60, but that accessor returns
+    //   a DIFFERENT field — not the GameMode pointer. The real offset was found by:
+    //   1. Assembly at 0x143796335: "mov rcx, [r13+0AA0h]" where r13=Player* is passed directly to
+    //      GameMode::attack (sub_1461C4160). Unambiguous asm evidence.
+    //   2. sub_141C1E190(player): directly does *(player+2720) then calls into GameMode vtable.
+    //   3. sub_146612BD0/BE0/EE0/FA0: all pattern *(*(a1+8)+2720) where a1+8=Player — GameMode vtable
+    //      methods reading player->gamemode back-reference, confirming [Player+0xAA0]=GameMode*.
+    //   4. sub_140484390: a1[340]=... where 340*8=2720=0xAA0 (Player copy-assign sets gamemode slot).
+    //   Player+0xAA0 is the start of unique_ptr<GameMode>, whose first member is the raw GameMode*.
+    ADD_OFFSET("Player::gamemode", 0xAA0);
+
+    // Verified unchanged: Gamemode::player=0x8
+    // Gamemode::lastBreakProgress — was 0x20 (wrong), now 0x24. Confirmed via continueDestroyBlock.
+    ADD_OFFSET("Gamemode::lastBreakProgress", 0x24);
+
+    // Verified unchanged: Level::getPlayerMap=0x4E0, Level::LevelData=0x90,
+    // Level::worldFolderName=0x258, RaknetConnector::JoinedIp/RawIp/port (init21120)
+
+    // Level::hitResult — UniqueOwnerPointer<HitResultWrapper>.mValue at +0x1E8 (NOT +0x1E0 control node).
+    // Confirmed via Level ctor: lea rcx,[r14+1E0h] (control node), mov [r14+1E8h],rbx (actual ptr).
+    ADD_OFFSET("Level::hitResult", 0x1E8);
+
+    // RaknetConnector::getPeer — was 0x48 (init2180), now 0x2E8 in 1.26.10.
+    ADD_OFFSET("RaknetConnector::getPeer", 0x2E8);
+
+    // Font::getLineHeight vtable slot — was 7, now 9 (2 new virtuals inserted before it).
+    ADD_OFFSET("Font::getLineHeight", 7);
+    ADD_OFFSET("Font::getLineLength", 6);
+    // ClientInstance::viewMatrix — was 0x348, now 0x418. Confirmed via runtime probe (orthonormal cols).
+    ADD_OFFSET("ClientInstance::viewMatrix", 0x418);
+
+    // CSC hover state — polled from tick since _onContainerSlotHovered fires on click in 1.26.x.
+    // Confirmed via tick function, slot 53, click handler all reading these fields.
+    ADD_OFFSET("ContainerScreenController::mInteractingCollectionName", 0xF48);
+    ADD_OFFSET("ContainerScreenController::mInteractingCollectionIndex", 0xF68);
+
+    // LevelRendererPlayer matrix offsets — confirmed via IDA decompile of sub_1421881E0
+    // (setupViewArea) writing sequential 16-float blocks, and sub_1410FB8A0 reading them back.
+    // sub_1421881E0 writes view at a1+4016 (0xFB0) and proj at a1+4080 (0xFF0) where a1 is
+    // LevelRendererPlayer* (obtained as *(LevelRender+0x448)).
+    ADD_OFFSET("LevelRendererPlayer::viewMatrix", 0xFB0);
+    ADD_OFFSET("LevelRendererPlayer::projMatrix", 0xFF0);
+
+    // ContainerScreenController vtable shifted -1 in 1.26.10.
+    ADD_OFFSET("ContainerScreenController::_handlePlaceAll", 53);
+    ADD_OFFSET("ContainerScreenController::_handlePlaceOne", 54);
+
+    // AppPlatform vtable offsets — used for caret sync after tab completion.
+    // Confirmed via IDA mcp-2 (1.26.10) by tracing the concrete vtable at 0x148FB7F18:
+    //   slot 185 (byte 1480) = sub_140189E40 = updateTextBoxText
+    //   slot 186 (byte 1488) = sub_140189E90 = setCursorPosition
+    ADD_OFFSET("AppPlatform::updateTextBoxText", 1480);
+    ADD_OFFSET("AppPlatform::setCursorPosition", 1488); // what a number
+}
+
 void OffsetInit::init260() {
     Logger::custom(fg(fmt::color::golden_rod), "Offsets", "Loading offsets for 1.26.X");
 
@@ -17,9 +196,16 @@ void OffsetInit::init260() {
     ADD_OFFSET("Block::blockLegacy", 0x60);
     ADD_OFFSET("BlockLegacy::name", 0xA8);
     ADD_OFFSET("BlockLegacy::namespace", 0xD0);
+    ADD_OFFSET("BlockLegacy::mProperties", 0x150);
     ADD_OFFSET("BlockLegacy::mMapColor", 0x1B8);
     ADD_OFFSET("UIControl::children", 0x98);
     ADD_OFFSET("UIControl::components", 0xB8);
+    ADD_OFFSET("UIControl::mAlpha", 0x60);
+
+    // AppPlatform vtable slots shifted by one entry in 1.26.x. These are used
+    // after custom tab completion to sync the chat textbox contents and caret.
+    ADD_OFFSET("AppPlatform::updateTextBoxText", 1456);
+    ADD_OFFSET("AppPlatform::setCursorPosition", 1472);
 }
 
 void OffsetInit::init21130() {
@@ -45,9 +231,31 @@ void OffsetInit::init21130() {
     ADD_OFFSET("BlockLegacy::mDefaultState", 0x2E0);    // BlockType::mDefaultState -> Block const* (default permutation)
     ADD_OFFSET("Item::mBlockType", 0x178);              // WeakPtr<BlockType const> — per LeviLamina Item.h layout (0x1D8 was mCameraComponentLegacy)
 
+    // BlockLegacy (BlockType) light emission — the block's light level (0-15, stored as uint8_t).
+    // Confirmed via IDA: BlockLegacy::getLightEmission reads byte at [rcx+0x1A5](?)
+    // Torches=14, Glowstone=15, Redstone Torch=7, etc.
+    ADD_OFFSET("BlockLegacy::mLightEmission", 0x1A5);
+
+    // Dynamic Lighting — Block, LevelChunk, BlockSource, and ItemActor offsets.
+    // Block::mCachedComponentData starts at 0x80 (after mBlockType at 0x78 + 8 bytes).
+    // CachedComponentData: { Brightness mEmissiveBrightness; bool mIsSolid; BlockOcclusionType mOcclusionType; }
+    ADD_OFFSET("Block::mEmissiveBrightness", 0x80);
+    // BlockLegacy::mProperties — BlockProperty bitmask (uint64_t)
+    // Verified via IDA: `test [rcx+0x140], rdx` in hasProperty at 0x145b082f1
+    ADD_OFFSET("BlockLegacy::mProperties", 0x140);
+    // LevelChunk::mMin.y — dimension minHeight (int, e.g. -64 for overworld)
+    ADD_OFFSET("LevelChunk::mMinY", 0x64);
+    // LevelChunk::mPosition — ChunkPos {int x, int z}
+    ADD_OFFSET("LevelChunk::mPosition", 0x78);
+    // BlockSource::mListeners — vector<BlockSourceListener*>
+    ADD_OFFSET("BlockSource::mListeners", 0x68);
+    // ItemActor::mItem — ItemStack at this offset within the Actor (confirmed via runtime scan)
+    ADD_OFFSET("ItemActor::mItem", 0x3B0);
+    // DeferredFrameRenderer render context → PointLightCoordinator*
+
     // Better Inventory leather armor preview helpers.
-    ADD_OFFSET("ItemRenderer::armorRenderInfo", 0x230);
-    ADD_OFFSET("ArmorRenderInfo::typeIndex", 0x34);
+
+    ADD_OFFSET("UIControl::mAlpha", 0x60);
 
     ADD_OFFSET("MinecraftUIRenderContext::textures", 0x58);
 
@@ -57,6 +265,9 @@ void OffsetInit::init21130() {
     // mTrimMaterialRegistry=0x120, mItemRegistry=0x198, mBlockTypeRegistry=0x1A8.
     ADD_OFFSET("Level::mItemRegistry", 0x198);
     // Offset of mNameToItemMap (unordered_map<HashedString, WeakPtr<Item>>) within ItemRegistry.
+    // NOTE: In 1.21.130 the primary name lookup map is at 0x88.
+    // In 1.26.10 this changed — 0x88 became the short-name-only map; the primary (full HashedString)
+    // map moved to 0xC8. init2610() overrides this offset to 0xC8.
     ADD_OFFSET("ItemRegistry::mNameToItemMap", 0x88);
     // Offset of mTileItemNameToItemMap within ItemRegistry — maps tile short-names to items.
     ADD_OFFSET("ItemRegistry::mTileItemNameToItemMap", 0x108);
@@ -66,7 +277,6 @@ void OffsetInit::init21130() {
     // Binary-confirmed via IDA: getTexture does `add rcx, 0x190` where rcx=TextureGroupBase*.
     ADD_OFFSET("TextureGroup::loadedTextures", 0x190);
 
-    // AnimationComponent reload mechanism — used by FemaleGenderMod to force
     // the main player model to pick up modified geometry from skin packets.
     // Actor::getAnimationComponent() is virtual at vindex 109.
     // It checks AnimationComponent+0x368 against global mReloadTimeStampClient.
@@ -86,6 +296,24 @@ void OffsetInit::init21130() {
     // Read by Level::isMultiplayerGame (vtable index 139). True for any server/Realm/LAN,
     // false for singleplayer. Confirmed via IDA: UI getter reads LevelData+0x47B.
     ADD_OFFSET("LevelData::isMultiplayerGame", 0x47B);
+
+    // Item::mId — short (int16_t) at offset 0xAA in 1.21.132.
+    ADD_OFFSET("Item::mId", 0xAA);
+
+    // AppPlatform vtable offsets — used for caret sync after tab completion.
+    // Confirmed via IDA mcp-1 decompile of handleTabComplete_5param.
+    ADD_OFFSET("AppPlatform::updateTextBoxText", 1464);   // vtable byte offset → fn(this, const string*)
+    ADD_OFFSET("AppPlatform::setCursorPosition", 1480);   // vtable byte offset → fn(this, int)
+
+    // SwingAngle — byte offset within the SwingAngle signature where the 4-byte
+    // RIP-relative displacement lives. The sig is:
+    //   48 8B 06 0F 57 DB F3 0F 59 35 [disp32]
+    // so the displacement starts at byte 10.
+    ADD_OFFSET("SwingAngle", 10);
+
+    // ClientInstance::mMinecraft — unique_ptr<Minecraft> field (= raw Minecraft*).
+    // Identified via LeviLamina as mUnk599652, accessed by getMinecraft(isClientSide=true).
+    ADD_OFFSET("ClientInstance::minecraft", 0x1A8);
 }
 
 void OffsetInit::init21120()
@@ -764,7 +992,8 @@ void OffsetInit::init2030() {
     ADD_OFFSET("BlockSource::getBlock", 2); // might be incorrect, bounds of versions unknown
     ADD_OFFSET("BlockSource::getChunk", 41); // getChunk(int x, int z) — returns LevelChunk* (null if not loaded)
 
-    //ADD_OFFSET("ContainerScreenController::_handlePlaceAll", X);
+    ADD_OFFSET("ContainerScreenController::_handlePlaceAll", 56);
+    ADD_OFFSET("ContainerScreenController::_handlePlaceOne", 57);
 
     ADD_OFFSET("Actor::drop", 117);
 }

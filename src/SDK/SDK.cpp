@@ -132,6 +132,8 @@ std::shared_ptr<Packet> SDK::createPacket(int id) {
         Address = GET_SIG_ADDRESS("MinecraftPackets::createPacket");
     }
 
+    if (Address == NULL) return nullptr;
+
     const auto pFunction = reinterpret_cast<std::shared_ptr<Packet>(__fastcall *)(int)>(Address);
     return pFunction(id);
 }
@@ -152,9 +154,8 @@ std::string SDK::getCurrentScreen() {
 }
 
 bgfx::Context* SDK::getBgfxContext() {
-    static auto parse = hat::parse_signature(GET_SIG("bgfx::s_ctx"));
-    static auto result = hat::find_pattern(parse.value(), ".text");
-    return *reinterpret_cast<bgfx::Context**>(result.rel(3));
+    static const auto result = hat::scan_result{reinterpret_cast<std::byte*>(GET_SIG_ADDRESS("bgfx::s_ctx"))};
+    return result.has_result() ? *reinterpret_cast<bgfx::Context**>(result.rel(3)) : nullptr;
 }
 
 int SDK::getServerPing() {

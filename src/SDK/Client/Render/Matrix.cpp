@@ -1,8 +1,8 @@
 #include "Matrix.hpp"
-#include "GameRenderer.hpp"
 
 #include <SDK/SDK.hpp>
 #include <Client/GUi/D2D.hpp>
+#include <Client/Hook/Hooks/Render/UpdateCameraHook.hpp>
 
 glm::mat4 Matrix::getMatrixCorrection(GLMatrix mat) {
     glm::mat4 toReturn;
@@ -23,19 +23,15 @@ bool Matrix::WorldToScreen(Vec3<float> pos, Vec2<float> &screen) {
     auto guiData = SDK::clientInstance->getGuiData();
     if (!guiData) return false;
 
-    auto minecraftGame = SDK::clientInstance->getMinecraftGame();
-    if (!minecraftGame) return false;
-
-    auto gameRenderer = minecraftGame->getGameRenderer();
-    if (!gameRenderer) return false;
-
     if (!SDK::clientInstance->getLocalPlayer()) return false;
 
     const Vec2<float>& screenSize = guiData->ScreenSize;
 
-    Vec3<float> origin{0, 0, 0};
     auto levelRender = SDK::clientInstance->getLevelRender();
-    if (levelRender && levelRender->getLevelRendererPlayer()) {
+    auto levelRendererPlayer = levelRender ? levelRender->getLevelRendererPlayer() : nullptr;
+
+    Vec3<float> origin{0, 0, 0};
+    if (levelRendererPlayer) {
         origin = levelRender->getOrigin();
     } else {
         auto renderPosComp = SDK::clientInstance->getLocalPlayer()->getRenderPositionComponent();
@@ -44,8 +40,22 @@ bool Matrix::WorldToScreen(Vec3<float> pos, Vec2<float> &screen) {
 
     const Vec3<float> relativePos = pos.sub(origin);
 
-    const glm::mat4x4& viewMatrix = gameRenderer->getLastViewMatrix();
-    const glm::mat4x4& projMatrix = gameRenderer->getLastProjectionMatrix();
+    glm::mat4x4 viewMatrix;
+    glm::mat4x4 projMatrix;
+
+    // On 1.26.x, read matrices directly from LevelRendererPlayer where setupViewArea writes them.
+    // This avoids relying on UpdateCameraHook, whose "idk" sig resolves to a different function
+    // in 1.26.10 (entity rotation / atan2 math rather than MinecraftCamera::updateCamera).
+    if (GET_OFFSET("LevelRendererPlayer::viewMatrix") != 0 && levelRendererPlayer) {
+        viewMatrix = levelRendererPlayer->getViewMatrix();
+        projMatrix = levelRendererPlayer->getProjMatrix();
+    } else {
+        // Older versions: use matrices cached by UpdateCameraHook from CameraComponent.
+        if (!UpdateCameraHook::matricesValid) return false;
+        viewMatrix = UpdateCameraHook::cachedModelView;
+        projMatrix = UpdateCameraHook::cachedProjection;
+    }
+
     const glm::mat4x4 mvp = projMatrix * viewMatrix;
 
     const glm::vec4 clipCoords = mvp * glm::vec4(relativePos.x, relativePos.y, relativePos.z, 1.0f);

@@ -3,9 +3,11 @@
 
 #pragma comment(lib, "shlwapi.lib")
 
-// ShellMessageBoxW signature (not always in headers, but exported from shlwapi.dll).
-// Important: this is a variadic Win32 API, so the function pointer must use WINAPIV.
-// For the wide version, "%s" is the correct wsprintf-style format token for LPCWSTR.
+// ShellMessageBoxW provides themed dialogs (modern look), but it runs the lpcText
+// parameter through wvsprintf internally. Instead of fighting format specifier
+// semantics (%s vs %ls varies), we pass text directly as the format string with
+// no variadic args. Any literal '%' in the text is escaped to '%%' to avoid
+// wvsprintf interpreting it.
 
 int ShellMessageUtil::showW(HWND hwnd, const wchar_t* text, const wchar_t* caption, UINT type) {
     HMODULE shlwapi = GetModuleHandleW(L"shlwapi.dll");
@@ -17,7 +19,13 @@ int ShellMessageUtil::showW(HWND hwnd, const wchar_t* text, const wchar_t* capti
             GetProcAddress(shlwapi, "ShellMessageBoxW")
         );
         if (pShellMessageBoxW) {
-            return pShellMessageBoxW(nullptr, hwnd, L"%s", caption, type, text);
+            // Escape any '%' → '%%' so wvsprintf treats text as literal
+            std::wstring escaped;
+            for (const wchar_t* p = text; *p; ++p) {
+                if (*p == L'%') escaped += L"%%";
+                else escaped += *p;
+            }
+            return pShellMessageBoxW(nullptr, hwnd, escaped.c_str(), caption, type);
         }
     }
 

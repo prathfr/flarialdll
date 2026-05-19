@@ -1,5 +1,9 @@
 #pragma once
 
+#include <Utils/VersionUtils.hpp>
+
+#include <type_traits>
+
 class EntityId;
 
 struct EntityIdTraits {
@@ -19,6 +23,28 @@ public:
 };
 
 struct IEntityComponent {};
+
+template<typename T>
+struct ComponentClangType {
+    using type = T;
+};
+
+template<typename T>
+struct ComponentTypeName {
+    static constexpr hat::fixed_string value = T::type_name;
+};
+
+template<std::derived_from<IEntityComponent> Type>
+struct entt::type_hash<Type> {
+    [[nodiscard]] static consteval id_type value() noexcept {
+        constexpr auto name = ComponentTypeName<Type>::value;
+        return hashed_string::value(name.data(), name.size());
+    }
+
+    [[nodiscard]] consteval operator id_type() const noexcept {
+        return value();
+    }
+};
 
 template<std::derived_from<IEntityComponent> Type>
 struct entt::component_traits<Type> {
@@ -70,42 +96,86 @@ namespace V1_20_50 {
         template<std::derived_from<IEntityComponent> T>
         [[nodiscard]] T *tryGetComponent(EntityId id) {
             if(!this->isValid()) return nullptr;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    return reinterpret_cast<T*>(this->enttRegistry.try_get<ClangT>(id));
+                }
+            }
             return this->enttRegistry.try_get<T>(id);
         }
 
         template<std::derived_from<IEntityComponent> T>
         [[nodiscard]] T *tryGetComponent() {
             if(!this->isValid()) return nullptr;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    return reinterpret_cast<T*>(this->enttRegistry.try_get<ClangT>(this->entity));
+                }
+            }
             return this->enttRegistry.try_get<T>(this->entity);
         }
 
         template<std::derived_from<IEntityComponent> T>
         [[nodiscard]] const T *tryGetComponent() const {
             if(!this->isValid()) return nullptr;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    return reinterpret_cast<const T*>(this->enttRegistry.try_get<ClangT>(this->entity));
+                }
+            }
             return this->enttRegistry.try_get<T>(this->entity);
         }
 
         template<std::derived_from<IEntityComponent> T>
         [[nodiscard]] bool hasComponent(EntityId id) const {
             if(!this->isValid()) return false;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    return this->enttRegistry.all_of<ClangT>(id);
+                }
+            }
             return this->enttRegistry.all_of<T>(id);
         }
 
         template<std::derived_from<IEntityComponent> T>
         [[nodiscard]] bool hasComponent() const {
             if(!this->isValid()) return false;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    return this->enttRegistry.all_of<ClangT>(this->entity);
+                }
+            }
             return this->enttRegistry.all_of<T>(this->entity);
         }
 
         template<std::derived_from<IEntityComponent> T>
         void addComponent() {
             if(!this->isValid()) return;
-            return this->enttRegistry.get_or_emplace<T>(this->entity);
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    this->enttRegistry.get_or_emplace<ClangT>(this->entity);
+                    return;
+                }
+            }
+            this->enttRegistry.get_or_emplace<T>(this->entity);
         }
 
         template<std::derived_from<IEntityComponent> T>
         void removeComponent() {
             if(!this->isValid()) return;
+            if (VersionUtils::checkAboveOrEqual(26, 20)) {
+                using ClangT = typename ComponentClangType<T>::type;
+                if constexpr (!std::is_same_v<T, ClangT>) {
+                    this->enttRegistry.remove<ClangT>(this->entity);
+                    return;
+                }
+            }
             this->enttRegistry.remove<T>(this->entity);
         }
     };

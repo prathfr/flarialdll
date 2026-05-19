@@ -181,8 +181,24 @@ public:
 	std::bitset<136> mHasComponentData;
 };
 
+struct SynchedActorDataComponentCLANG : IEntityComponent {
+public:
+	static constexpr hat::fixed_string type_name = "SynchedActorDataComponent";
+	SynchedActorData mData;
+};
+
 struct SynchedActorDataComponent : IEntityComponent {
 public:
 	SynchedActorData mData;
 };
 static_assert(sizeof(SynchedActorDataComponent) == 0x48);
+
+template<>
+struct ComponentTypeName<SynchedActorDataComponent> {
+    static constexpr hat::fixed_string value = "struct SynchedActorDataComponent";
+};
+
+template<>
+struct ComponentClangType<SynchedActorDataComponent> {
+    using type = SynchedActorDataComponentCLANG;
+};

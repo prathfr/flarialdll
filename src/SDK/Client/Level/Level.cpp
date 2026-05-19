@@ -17,6 +17,12 @@ std::vector<Actor *> Level::getRuntimeActorList() {
         return (this->*getRuntimeActorList)();
     }
 
+    // 1.26+ has had stale Level vtable indices during porting. Calling the wrong
+    // virtual here corrupts the caller's stack, often crashing after this returns.
+    if (VersionUtils::checkAboveOrEqual(26, 0)) {
+        return {};
+    }
+
     // Fallback: try vtable-based call
     static uintptr_t vfAddr = 0;
     static bool vfResolved = false;
@@ -65,9 +71,6 @@ std::vector<Actor *> Level::getRuntimeActorList() {
 }
 
 ItemRegistryRef Level::getItemRegistry() {
-    // Direct member access — reads the ItemRegistryRef stored at
-    // Level+0x198 (confirmed via binary analysis of 1.21.13x).
-    // This is more reliable than vtable calls which had ABI mismatch issues.
     static int off = GET_OFFSET("Level::mItemRegistry");
     return hat::member_at<ItemRegistryRef>(this, off);
 }

@@ -3,7 +3,16 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <array>
 #include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <limits>
+#include <mutex>
+#include <sstream>
+#include <thread>
 #include <curl/curl/curl.h>
 #include <curl/curl/easy.h>
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -11,7 +20,7 @@
 #include <Utils/Logger/Logger.hpp>
 
 
-// Refer to https://support.playhive.com/in-game-unlocks/
+//   Refer to https://support.playhive.com/in-game-unlocks/
 static const std::vector<int> xpTable = {
     0, // Level 0
     0, // Level 1
@@ -133,6 +142,147 @@ namespace Hive
         int httpCode;
     };
 
+    struct RateLimitHeaders
+    {
+        int limit = -1;
+        int remaining = -1;
+        int retryAfterSeconds = -1;
+        long long resetEpoch = 0;
+    };
+
+    inline std::string trimHeaderValue(std::string value)
+    {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())))
+        {
+            value.erase(value.begin());
+        }
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())))
+        {
+            value.pop_back();
+        }
+        return value;
+    }
+
+    inline int parseHeaderInt(const std::string& value, const int fallback = -1)
+    {
+        try
+        {
+            return std::stoi(value);
+        }
+        catch (...)
+        {
+            return fallback;
+        }
+    }
+
+    inline long long parseHeaderLongLong(const std::string& value, const long long fallback = 0)
+    {
+        try
+        {
+            return std::stoll(value);
+        }
+        catch (...)
+        {
+            return fallback;
+        }
+    }
+
+    inline size_t CurlHeaderCallback(char* buffer, const size_t size, const size_t nitems, void* userdata)
+    {
+        const size_t totalSize = size * nitems;
+        auto* headers = static_cast<RateLimitHeaders*>(userdata);
+        if (!headers) return totalSize;
+
+        std::string header(buffer, totalSize);
+        const size_t separator = header.find(':');
+        if (separator == std::string::npos) return totalSize;
+
+        std::string name = header.substr(0, separator);
+        std::ranges::transform(name, name.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const std::string value = trimHeaderValue(header.substr(separator + 1));
+
+        if (name == "x-ratelimit-limit") headers->limit = parseHeaderInt(value);
+        else if (name == "x-ratelimit-remaining") headers->remaining = parseHeaderInt(value);
+        else if (name == "x-ratelimit-reset") headers->resetEpoch = parseHeaderLongLong(value);
+        else if (name == "retry-after") headers->retryAfterSeconds = parseHeaderInt(value);
+
+        return totalSize;
+    }
+
+    inline std::mutex& getRateLimitMutex()
+    {
+        static std::mutex mutex;
+        return mutex;
+    }
+
+    inline std::chrono::steady_clock::time_point& getRateLimitPauseUntil()
+    {
+        static std::chrono::steady_clock::time_point pauseUntil = std::chrono::steady_clock::time_point::min();
+        return pauseUntil;
+    }
+
+    inline void waitForRateLimitWindow()
+    {
+        while (true)
+        {
+            std::chrono::steady_clock::time_point pauseUntil;
+            {
+                std::lock_guard lock(getRateLimitMutex());
+                pauseUntil = getRateLimitPauseUntil();
+            }
+
+            if (std::chrono::steady_clock::now() >= pauseUntil) return;
+            std::this_thread::sleep_until(pauseUntil);
+        }
+    }
+
+    inline void updateRateLimitWindow(const int httpCode, const RateLimitHeaders& headers)
+    {
+        int waitSeconds = 0;
+        if ((httpCode == 429 || headers.remaining == 0) && headers.retryAfterSeconds > 0)
+        {
+            waitSeconds = headers.retryAfterSeconds;
+        }
+        else if (headers.remaining == 0 && headers.resetEpoch > 0)
+        {
+            const auto resetTime = std::chrono::system_clock::from_time_t(
+                static_cast<std::time_t>(headers.resetEpoch));
+            waitSeconds = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    resetTime - std::chrono::system_clock::now()).count());
+            waitSeconds = std::max(waitSeconds, 1);
+        }
+
+        if (waitSeconds <= 0) return;
+
+        const auto pauseUntil = std::chrono::steady_clock::now() +
+            std::chrono::seconds(waitSeconds) + std::chrono::milliseconds(250);
+        std::lock_guard lock(getRateLimitMutex());
+        getRateLimitPauseUntil() = std::max(getRateLimitPauseUntil(), pauseUntil);
+    }
+
+    inline std::string getPrestigePrefix(const int prestige)
+    {
+        if (prestige <= 0) return "";
+
+        static constexpr std::array<const char*, 11> romanPrestiges = {
+            "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"
+        };
+
+        if (prestige < static_cast<int>(romanPrestiges.size()))
+        {
+            return "[" + std::string(romanPrestiges[prestige]) + "] ";
+        }
+
+        return "[" + std::to_string(prestige) + "] ";
+    }
+
+    inline std::string formatPrestigeLevel(const int prestige, const int level)
+    {
+        return getPrestigePrefix(prestige) + std::to_string(level);
+    }
+
     class PlayerStats
     {
         float fkdr;
@@ -192,15 +342,7 @@ namespace Hive
 
         std::string getPrestige() const
         {
-            std::string p = "";
-            if (prestige != 0) p = "[";
-            if (prestige == 1) p += "I";
-            if (prestige == 2) p += "II";
-            if (prestige == 3) p += "III";
-            if (prestige == 4) p += "IV";
-            if (prestige == 5) p += "V";
-            if (prestige != 0) p += "] ";
-            return p;
+            return getPrestigePrefix(prestige);
         };
     };
 
@@ -268,8 +410,10 @@ namespace Hive
         }
 
         std::string responseBody;
+        RateLimitHeaders rateLimitHeaders;
         long statusCode = 0;
 
+        waitForRateLimitWindow();
         curl_easy_setopt(curl, CURLOPT_URL, URL.c_str());
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "FlarialClient/1.0");
         curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
@@ -279,6 +423,8 @@ namespace Hive
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBody);
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, CurlHeaderCallback);
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &rateLimitHeaders);
 
         const CURLcode curlResult = curl_easy_perform(curl);
         if (curlResult == CURLE_OK)
@@ -291,6 +437,7 @@ namespace Hive
         }
 
         curl_easy_cleanup(curl);
+        updateRateLimitWindow(static_cast<int>(statusCode), rateLimitHeaders);
         return {responseBody, static_cast<int>(statusCode)};
     }
 
@@ -304,6 +451,28 @@ namespace Hive
             pos += replace.length();
         }
         return subject;
+    }
+
+    inline std::string encodeUrlComponent(const std::string& value)
+    {
+        std::ostringstream escaped;
+        escaped.fill('0');
+        escaped << std::hex;
+
+        for (const unsigned char c : value)
+        {
+            if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+            {
+                escaped << static_cast<char>(c);
+                continue;
+            }
+
+            escaped << std::uppercase;
+            escaped << '%' << std::setw(2) << static_cast<int>(c);
+            escaped << std::nouppercase;
+        }
+
+        return escaped.str();
     }
 
     inline int getLevelFromXP(const int xp, const int max = 100)
@@ -324,14 +493,30 @@ namespace Hive
         }
     }
 
-    inline LeaderboardResult GetLeaderboard(const std::string& gameId, const bool monthly)
+    inline LeaderboardResult GetLeaderboard(const std::string& gameId, const bool monthly,
+                                            const int monthlyYear = 0,
+                                            const int monthlyMonth = 0,
+                                            const int amount = 100,
+                                            const int skip = 0)
     {
         LeaderboardResult result;
 
         try
         {
-            const std::string path = monthly ? "monthly" : "all";
-            const std::string url = "https://api.playhive.com/v0/game/" + path + "/" + gameId;
+            std::string url;
+            if (monthly && monthlyYear > 0 && monthlyMonth > 0)
+            {
+                const int requestedAmount = std::clamp(amount, 1, 100);
+                const int requestedSkip = std::max(skip, 0);
+                url = "https://api.playhive.com/v0/game/monthly/" + gameId + "/" +
+                    std::to_string(monthlyYear) + "/" + std::to_string(monthlyMonth) + "/" +
+                    std::to_string(requestedAmount) + "/" + std::to_string(requestedSkip);
+            }
+            else
+            {
+                const std::string path = monthly ? "monthly" : "all";
+                url = "https://api.playhive.com/v0/game/" + path + "/" + gameId;
+            }
 
             auto [response, httpCode] = GetString(url);
             if (httpCode != 200)
@@ -411,13 +596,29 @@ namespace Hive
         return result;
     }
 
-    inline PlayerStats GetStats(const std::string& gameId, const std::string& username)
+    inline PlayerStats GetStats(const std::string& gameId, const std::string& username,
+                                const bool monthly = false, const int monthlyYear = 0,
+                                const int monthlyMonth = 0)
     {
         PlayerStats stats;
 
         try
         {
-            std::string url = "https://api.playhive.com/v0/game/all/" + gameId + "/" + username;
+            const std::string encodedUsername = encodeUrlComponent(username);
+            std::string url;
+            if (monthly)
+            {
+                url = "https://api.playhive.com/v0/game/monthly/player/" + gameId + "/" +
+                    encodedUsername;
+                if (monthlyYear > 0 && monthlyMonth > 0)
+                {
+                    url += "/" + std::to_string(monthlyYear) + "/" + std::to_string(monthlyMonth);
+                }
+            }
+            else
+            {
+                url = "https://api.playhive.com/v0/game/all/" + gameId + "/" + encodedUsername;
+            }
 
             httpResponse response = GetString(url);
             std::string jsonResponse = response.response;
@@ -439,6 +640,23 @@ namespace Hive
             auto safeInt = [&](const char* key, int fallback = 0) -> int {
                 return jsonData.contains(key) ? jsonData[key].get<int>() : fallback;
             };
+
+            const int apiXp = safeInt("xp", -1);
+            if (apiXp >= 0) stats.setExtraStat("xp", apiXp);
+
+            const int humanIndex = safeInt("human_index", -1);
+            if (humanIndex >= 0 && humanIndex < std::numeric_limits<int>::max())
+            {
+                stats.setExtraStat("rank", humanIndex);
+            }
+            else
+            {
+                const int index = safeInt("index", -1);
+                if (index >= 0 && index < std::numeric_limits<int>::max() - 1)
+                {
+                    stats.setExtraStat("rank", index + 1);
+                }
+            }
 
             if (gameId == "bed")
             {
@@ -465,9 +683,10 @@ namespace Hive
                 stats.setDeaths(deaths);
                 stats.setExtraStat("beds_destroyed", safeInt("beds_destroyed"));
                 stats.setExtraStat("final_kills", finalKills);
-
-                // for future:
-                // if (jsonData.contains("prestige")) stats.setPrestige(jsonData["prestige"].get<int>());
+                if (jsonData.contains("prestige") && jsonData["prestige"].is_number_integer())
+                {
+                    stats.setPrestige(jsonData["prestige"].get<int>());
+                }
             }
 
             if (gameId == "sky")

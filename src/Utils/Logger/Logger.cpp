@@ -42,7 +42,7 @@ namespace Logger {
         if (!console)
         {
             AllocConsole();
-            SetConsoleTitleA("Flarial-Debugger");
+            SetConsoleTitleA("Flarial Debug Console");
 
             FILE* fp = nullptr;
             freopen_s(&fp, "CONOUT$", "w", stdout);

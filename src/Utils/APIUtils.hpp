@@ -1,6 +1,14 @@
 #pragma once
 
+#include <atomic>
+#include <functional>
 #include <json/json_fwd.hpp>
+#include <map>
+#include <shared_mutex>
+#include <string>
+#include <thread>
+#include <unordered_set>
+#include <vector>
 
 template<typename T>
 struct transparent_hash : std::hash<T> { using is_transparent = void; };
@@ -10,6 +18,9 @@ class APIUtils {
   static inline std::vector<std::string> onlineUsers{};
   static inline std::unordered_set<std::string, transparent_hash<std::string_view>, std::equal_to<>> onlineUsersSet{};
   static inline std::map<std::string, std::string, std::less<>> vipUserToRole{};
+  static inline std::shared_mutex rolesMutex{};
+  static inline std::atomic_bool vipStreamRunning{false};
+  static inline std::thread vipStreamThread{};
 
   static std::pair<long, std::string> POST_Simple(const std::string &url, const std::string &postData);
 
@@ -22,8 +33,13 @@ class APIUtils {
 
   static std::string get(const std::string& link);
   static nlohmann::json getVips();
+  static void applyVips(const nlohmann::json& vipsJson);
+  static void startVipUpdates();
+  static void stopVipUpdates();
   static nlohmann::json getUsers();
   static bool hasRole(std::string_view role, std::string_view name);
+  static bool isOnlineUser(std::string_view name);
+  static std::vector<std::string> getOnlineUsersSnapshot();
 
   static std::vector<std::string> ListToVector(const std::string &listStr);
 

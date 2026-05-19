@@ -14,6 +14,22 @@
 #include "../Network/Raknet/RaknetConnector.hpp"
 #include "../Render/Camera.hpp"
 
+namespace ClientInstanceDetail {
+    __declspec(noinline) inline float tryReadFloat(const void* base, int offset, float defaultValue) {
+        if (!base) return defaultValue;
+
+        __try {
+            const float value = hat::member_at<float>(base, offset);
+            if (value < 0.1f || value > 10.0f || std::isnan(value) || std::isinf(value)) {
+                return defaultValue;
+            }
+            return value;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            return defaultValue;
+        }
+    }
+}
+
 /// Primary interface to the Minecraft client; provides access to player, world, rendering, and network state.
 class ClientInstance {
 public:
@@ -55,24 +71,15 @@ public:
     LevelRender *getLevelRender();
 
     float getFovX() {
-        float fov = hat::member_at<float>(this, GET_OFFSET("ClientInstance::getFovX"));
-        // Sanity check - FOV should be a reasonable positive value (typically 0.5 to 3.0 radians)
-        // Values below 0.1 are definitely invalid (would be less than 6 degrees)
-        // If invalid, return a default value based on ~70 degree FOV
-        if (fov < 0.1f || fov > 10.0f || std::isnan(fov) || std::isinf(fov)) {
-            return 1.22f; // Default ~70 degree FOV in radians
-        }
-        return fov;
+        constexpr float defaultFov = 1.22f;
+        static int off = GET_OFFSET("ClientInstance::getFovX");
+        return ClientInstanceDetail::tryReadFloat(this, off, defaultFov);
     };
 
     float getFovY() {
-        float fov = hat::member_at<float>(this, GET_OFFSET("ClientInstance::getFovY"));
-        // Sanity check - FOV should be a reasonable positive value (typically 0.5 to 3.0 radians)
-        // Values below 0.1 are definitely invalid
-        if (fov < 0.1f || fov > 10.0f || std::isnan(fov) || std::isinf(fov)) {
-            return 1.22f; // Default ~70 degree FOV in radians
-        }
-        return fov;
+        constexpr float defaultFov = 1.22f;
+        static int off = GET_OFFSET("ClientInstance::getFovY");
+        return ClientInstanceDetail::tryReadFloat(this, off, defaultFov);
     };
 
     Vec2<float> getFov() {
@@ -88,6 +95,13 @@ public:
             return nullptr;
 
         return getPacketSender()->networkSystem->remoteConnectorComposite->rakNetConnector;
+    }
+
+    /// Returns the Minecraft server instance, or nullptr if not in a world.
+    /// Reads mMinecraft field directly (offset confirmed via IDA mcp-1 for 1.21.132: [this+0x7B0]).
+    Minecraft* getMinecraft() {
+        static int off = GET_OFFSET("ClientInstance::minecraft");
+        return hat::member_at<Minecraft*>(this, off);
     }
 
     /// Forces a recalculation of screen size and GUI scale (used for custom GUI scale overrides).

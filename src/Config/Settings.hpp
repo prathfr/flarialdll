@@ -48,6 +48,10 @@ public:
 
 class Settings {
 public:
+    [[nodiscard]] bool hasSetting(const std::string& name) const {
+        return settings.find(name) != settings.end();
+    }
+
     template<typename T>
     void addSetting(const std::string &name, const T &defaultValue) {
         settings.emplace(name, std::make_unique<SettingType<T> >(name, defaultValue));
@@ -78,7 +82,11 @@ public:
         if (it != settings.end()) {
             return static_cast<SettingType<T> *>(it->second.get());
         }
-        return nullptr;
+        // Return a static sentinel with default value instead of nullptr.
+        // Prevents crashes at the dozens of call sites that do ->value without null checks.
+        static thread_local SettingType<T> sentinel("", T{});
+        sentinel.value = T{};
+        return &sentinel;
     }
 
     template<typename FromType, typename ToType>
@@ -140,7 +148,7 @@ public:
     }
 
     [[nodiscard]] std::string ToJson() const {
-        json jsonData;
+        json jsonData = json::object();
         for (const auto &settingPair: settings) {
             jsonData[settingPair.first] = settingPair.second->ToJson();
         }

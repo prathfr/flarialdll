@@ -68,6 +68,7 @@ std::string Utils::getLogsPath() {
 
 std::string Utils::getMouseAsString(int key) {
     switch (key) {
+        case MouseButton::Left: return "MB_LEFT";
         case MouseButton::Right: return "MB_RIGHT";
         case MouseButton::Middle: return "MB_MIDDLE";
         case MouseButton::Button5: return "MB_5";

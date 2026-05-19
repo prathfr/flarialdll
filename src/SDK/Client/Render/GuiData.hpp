@@ -5,6 +5,14 @@
 #include <Utils/Memory/Game/SignatureAndOffsetManager.hpp>
 #include "./GuiMessage.hpp"
 
+struct GuiMessageParams {
+    std::string auxiliaryText{};
+    bool hasAuxiliaryText = false;
+    char pad[7]{};
+};
+
+static_assert(sizeof(GuiMessageParams) == 0x28);
+
 class GuiData {
 public:
     BUILD_ACCESS(this, Vec2<float>, ScreenSize, GET_OFFSET("GuiData::ScreenSize"));

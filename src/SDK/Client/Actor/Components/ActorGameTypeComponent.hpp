@@ -12,7 +12,23 @@ enum class GameType : int {
     Spectator = 6,
 };
 
+struct ActorGameTypeComponentCLANG : IEntityComponent {
+    static constexpr hat::fixed_string type_name = "ActorGameTypeComponent";
+    GameType gameType;
+};
+
 struct ActorGameTypeComponent : IEntityComponent {
     GameType gameType;
 };
+static_assert(sizeof(ActorGameTypeComponentCLANG) == 0x4);
 static_assert(sizeof(ActorGameTypeComponent) == 0x4);
+
+template<>
+struct ComponentTypeName<ActorGameTypeComponent> {
+    static constexpr hat::fixed_string value = "struct ActorGameTypeComponent";
+};
+
+template<>
+struct ComponentClangType<ActorGameTypeComponent> {
+    using type = ActorGameTypeComponentCLANG;
+};

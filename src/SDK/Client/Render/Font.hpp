@@ -6,4 +6,5 @@ class Font {
 public:
     float getLineLength(const std::string& text, float fontSize, bool showColorSymbol);
     float getLineHeight();
+    BUILD_ACCESS(this, Vec2<float>, Size, 0x268)
 };

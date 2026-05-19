@@ -259,12 +259,10 @@ struct UnifiedMobEffectData {
 };
 
 struct MobEffectsComponent1_21_20 {
-    static constexpr hat::fixed_string type_name = "struct MobEffectsComponent";
     std::vector<MobEffectInstance1_21_20> effects;
 };
 
 struct MobEffectsComponent1_21_30 {
-    static constexpr hat::fixed_string type_name = "struct MobEffectsComponent";
     std::vector<MobEffectInstance1_21_30> effects;
 };
 
@@ -294,4 +292,19 @@ public:
     }
 };
 
+struct MobEffectsComponentCLANG : MobEffectsComponent {
+    static constexpr hat::fixed_string type_name = "MobEffectsComponent";
+};
+
+static_assert(sizeof(MobEffectsComponentCLANG) == 0x18);
 static_assert(sizeof(MobEffectsComponent) == 0x18);
+
+template<>
+struct ComponentTypeName<MobEffectsComponent> {
+    static constexpr hat::fixed_string value = "struct MobEffectsComponent";
+};
+
+template<>
+struct ComponentClangType<MobEffectsComponent> {
+    using type = MobEffectsComponentCLANG;
+};

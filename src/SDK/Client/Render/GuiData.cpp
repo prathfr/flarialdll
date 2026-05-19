@@ -12,16 +12,20 @@ void GuiData::displayClientMessage(const std::string &str) {
         sig = GET_SIG_ADDRESS("GuiData::displayClientMessage");
     }
 
-    if (VersionUtils::checkAboveOrEqual(21, 20)) {
-        char messageParams[0x28]{};
+    if (sig == 0) {
+        return;
+    }
 
-        using func_t = void(*)(GuiData*, const std::string&, char*, bool);
-        static auto func = reinterpret_cast<func_t>(sig);
-        func(this, str, messageParams, true);
+    if (VersionUtils::checkAboveOrEqual(21, 20)) {
+        GuiMessageParams messageParams{};
+
+        using func_t = __int64(__fastcall *)(GuiData*, const std::string&, const GuiMessageParams*, bool);
+        auto func = reinterpret_cast<func_t>(sig);
+        func(this, str, &messageParams, true);
     }
     else {
-        using func_t = void(*)(GuiData*, const std::string&, bool);
-        static auto func = reinterpret_cast<func_t>(sig);
+        using func_t = __int64(__fastcall *)(GuiData*, const std::string&, bool);
+        auto func = reinterpret_cast<func_t>(sig);
         func(this, str, true);
     }
 }

@@ -21,7 +21,6 @@
 #include "Components/AttributesComponent.hpp"
 #include "Components/SynchedActorDataComponent.hpp"
 
-
 enum ActorFlags {
     FLAG_ONFIRE = 0,
     FLAG_SNEAKING = 1,

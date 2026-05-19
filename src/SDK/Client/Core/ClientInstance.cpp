@@ -3,6 +3,7 @@
 #include <libhat/Access.hpp>
 
 #include "Client.hpp"
+#include "Utils/Logger/Logger.hpp"
 #include "Utils/PlatformUtils.hpp"
 #include "../../../Client/Hook/Hooks/Input/CursorHandler.hpp"
 
@@ -14,6 +15,10 @@ LocalPlayer *ClientInstance::getLocalPlayer()
     if (indexRef == 0)
     {
         indexRef = GET_SIG_ADDRESS("ClientInstance::getLocalPlayerIndex");
+        if (indexRef == 0)
+        {
+            return nullptr;
+        }
     }
 
     int index = *reinterpret_cast<int *>(indexRef + 9) / 8;
@@ -136,6 +141,10 @@ void ClientInstance::_updateScreenSizeVariables(Vec2<float> *totalScreenSize, Ve
                                                 float forcedGuiScale)
 {
     static auto sig = GET_SIG_ADDRESS("ClientInstance::_updateScreenSizeVariables");
-    auto fn = reinterpret_cast<void(__thiscall *)(ClientInstance *, Vec2<float> *, Vec2<float> *, float)>(sig);
+    if (!sig) {
+        Logger::warn("ClientInstance::_updateScreenSizeVariables signature is unresolved");
+        return;
+    }
+    auto fn = reinterpret_cast<void(__fastcall *)(ClientInstance *, Vec2<float> *, Vec2<float> *, float)>(sig);
     fn(this, totalScreenSize, safeZone, forcedGuiScale);
 }

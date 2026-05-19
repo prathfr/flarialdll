@@ -7,6 +7,7 @@ class UIControl {
 public:
     BUILD_ACCESS(this, Vec2<float>, sizeConstrains, GET_OFFSET("UIControl::sizeConstrains"));
     BUILD_ACCESS(this, Vec2<float>, parentRelativePosition, GET_OFFSET("UIControl::parentRelativePosition"));
+    BUILD_ACCESS(this, float, alpha, GET_OFFSET("UIControl::mAlpha"));
     BUILD_ACCESS(this, std::vector<std::shared_ptr<UIControl>>, children, GET_OFFSET("UIControl::children"));
 
     std::string& getLayerName() {
@@ -19,13 +20,15 @@ public:
 
     void updatePosition(bool override = false) {
         if (VersionUtils::checkAboveOrEqual(21, 40)) {
-            int& flags = hat::member_at<int>(this, 0x18);
+            auto& flags = hat::member_at<uint8_t>(this, 0x18);
             flags |= 1; // set cachedPositionDirty
             using func = Vec2<float>*(__fastcall*)(UIControl*);
             static auto getPosition = reinterpret_cast<func>(GET_SIG_ADDRESS("UIControl::getPosition"));
+            if (!getPosition) return;
             if(override) {
                 auto newPos = parentRelativePosition;
                 auto* pos = getPosition(this);
+                if (!pos) return;
                 *pos = newPos;
             } else {
                 getPosition(this);

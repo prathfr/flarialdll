@@ -10,7 +10,16 @@
 #include <string>
 
 namespace glaiel::crashlogs {
-    //Begins crash monitoring. Crash logs will not be generated until begin_monitoring has been called
+    //Register OS-level exception filters as early as possible from the init thread.
+    //Does NOT spawn the writer thread or initialize telemetry. Idempotent.
+    //If a crash occurs before begin_monitoring(), the handler will fall back to a
+    //synchronous write on the crashing thread, and a paired last-chance crashlog
+    //is always emitted from the exception path.
+    void early_register();
+
+    //Begins crash monitoring. Spawns the writer thread, initializes telemetry, and
+    //ensures early_register() has run. Crash logs will not be generated until either
+    //early_register() or begin_monitoring() has been called.
     void begin_monitoring();
 
     //set the folder path that crashlogs will be saved in.

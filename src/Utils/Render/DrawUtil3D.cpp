@@ -1,6 +1,7 @@
 #include "DrawUtil3D.hpp"
 #include "MaterialUtils.hpp"
 #include "../../SDK/Client/Render/Tessellator/MeshHelpers.hpp"
+#include "../../Utils/VersionUtils.hpp"
 
 MCDrawUtil3D::MCDrawUtil3D(LevelRender* renderer, ScreenContext* ctx, mce::MaterialPtr* material)
     : levelRenderer(renderer), screenContext(ctx), material(material) {
@@ -61,7 +62,9 @@ void MCDrawUtil3D::drawQuad(Vec3<float> a, Vec3<float> b, Vec3<float> c, Vec3<fl
 	*scn->getColorHolder() = { 1.f, 1.f, 1.f, 1.f };
 	tess->begin(mce::PrimitiveMode::LineStrip, 1); // linestrip
 	tess->color(color.r, color.g, color.b, color.a);
-	auto origin = levelRenderer->getLevelRendererPlayer()->cameraPos;
+	auto* levelRendererPlayer = levelRenderer->getLevelRendererPlayer();
+	if (!levelRendererPlayer) return;
+	auto origin = VersionUtils::checkAboveOrEqual(26, 20) ? levelRenderer->getOrigin() : levelRendererPlayer->cameraPos;
 	a = a.sub(origin);
 	b = b.sub(origin);
 	c = c.sub(origin);

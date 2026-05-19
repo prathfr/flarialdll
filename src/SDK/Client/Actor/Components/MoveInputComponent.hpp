@@ -81,6 +81,64 @@ public:
     bool mJumpDown() const { return getFlag(Flag::JumpDown); }
     void setMJumpDown(bool value) { setFlag(Flag::JumpDown, value); }
 };
+struct MoveInputComponentCLANG : IEntityComponent {
+public:
+	static constexpr hat::fixed_string type_name = "MoveInputComponent";
+    // MoveInputComponent inner types define
+    enum class Flag : int {
+        Sneaking                        = 0,
+        Sprinting                       = 1,
+        WantUp                          = 2,
+        WantDown                        = 3,
+        Jumping                         = 4,
+        AutoJumpingInWater              = 5,
+        MoveInputStateLocked            = 6,
+        PersistSneak                    = 7,
+        AutoJumpEnabled                 = 8,
+        IsCameraRelativeMovementEnabled = 9,
+        IsRotControlledByMoveDirection  = 10,
+        Count                           = 11,
+    };
+
+public:
+    // member variables
+    // NOLINTBEGIN
+    MoveInputState              mInputState;
+    MoveInputState              mRawInputState;
+    uint8_t                     mHoldAutoJumpInWaterTicks;
+    Vec2<float>                 mMove;
+    Vec2<float>                 mLookDelta;
+    Vec2<float>                 mInteractDir;
+    Vec3<float>                 mDisplacement;
+    Vec3<float>                 mDisplacementDelta;
+    Vec3<float>                 mCameraOrientation;
+    uint16_t                    mFlagValues;
+    std::array<bool, 2>         mIsPaddling;
+    // NOLINTEND
+
+    // Helper methods for flag access
+    bool getFlag(Flag flag) const {
+        return (mFlagValues & (1 << static_cast<int>(flag))) != 0;
+    }
+
+    void setFlag(Flag flag, bool value) {
+        if (value)
+            mFlagValues |= (1 << static_cast<int>(flag));
+        else
+            mFlagValues &= ~(1 << static_cast<int>(flag));
+    }
+
+    // Convenience accessors
+    bool getSneaking() const { return getFlag(Flag::Sneaking); }
+    void setSneaking(bool value) { setFlag(Flag::Sneaking, value); }
+
+    bool getSprinting() const { return getFlag(Flag::Sprinting); }
+    void setSprinting(bool value) { setFlag(Flag::Sprinting, value); }
+
+    bool getJumping() const { return getFlag(Flag::Jumping); }
+    void setJumping(bool value) { setFlag(Flag::Jumping, value); }
+};
+
 struct MoveInputComponent : IEntityComponent {
 public:
     // MoveInputComponent inner types define
@@ -138,6 +196,16 @@ public:
     void setJumping(bool value) { setFlag(Flag::Jumping, value); }
 };
 
+template<>
+struct ComponentTypeName<MoveInputComponent> {
+    static constexpr hat::fixed_string value = "struct MoveInputComponent";
+};
+
+template<>
+struct ComponentClangType<MoveInputComponent> {
+    using type = MoveInputComponentCLANG;
+};
+
 struct MoveInputStateOLD
 {
 	bool mSneakDown;
@@ -175,7 +243,6 @@ struct MoveInputStateOLD
 
 struct MoveInputComponentOLD : IEntityComponent
 {
-	static constexpr hat::fixed_string type_name = "struct MoveInputComponent";
 	MoveInputStateOLD mInputState;
 	MoveInputStateOLD mRawInputState;
 	std::chrono::steady_clock::time_point mHoldAutoJumpInWaterUntil;
@@ -199,18 +266,17 @@ struct MoveInputComponentOLD : IEntityComponent
 	std::array<bool, 2> mIsPaddling;
 };
 
-namespace entt
+struct MoveInputComponentOLDCLANG : MoveInputComponentOLD
 {
-	template<>
-	struct type_hash<MoveInputComponentOLD>
-	{
-		[[nodiscard]] static consteval id_type value() noexcept {
-			constexpr auto name = MoveInputComponentOLD::type_name;
-			return hashed_string::value(name.data(), name.size());
-		}
+	static constexpr hat::fixed_string type_name = "MoveInputComponent";
+};
 
-		[[nodiscard]] consteval operator id_type() const noexcept {
-			return value();
-		}
-	};
+template<>
+struct ComponentTypeName<MoveInputComponentOLD> {
+    static constexpr hat::fixed_string value = "struct MoveInputComponent";
+};
+
+template<>
+struct ComponentClangType<MoveInputComponentOLD> {
+    using type = MoveInputComponentOLDCLANG;
 };

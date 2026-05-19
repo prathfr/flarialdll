@@ -10,7 +10,7 @@
 #include <Utils/PlatformUtils.hpp>
 #include <winrt/Windows.Storage.h>
 
-std::map<std::string, std::string> OptionsParser::parseOptionsFile() {
+std::filesystem::path OptionsParser::getOptionsFilePath() {
     std::filesystem::path path;
 
     if (PlatformUtils::isUWP()) {
@@ -21,12 +21,19 @@ std::map<std::string, std::string> OptionsParser::parseOptionsFile() {
         path = std::filesystem::path(localPath + "\\games\\com.mojang\\minecraftpe\\options.txt");
     }
 
+    return path;
+}
+
+std::map<std::string, std::string> OptionsParser::parseOptionsFile() {
+    const auto path = getOptionsFilePath();
     std::ifstream file(path);
 
     if (!file.is_open()) {
         LOG_ERROR("Failed to open options.txt at: {}", path.string());
         return OptionsParser::options;
     }
+
+    OptionsParser::options.clear();
 
     std::string line;
     while (std::getline(file, line)) {

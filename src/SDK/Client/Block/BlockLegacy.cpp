@@ -4,36 +4,13 @@
 #include <Utils/WinrtUtils.hpp>
 
 std::string BlockLegacy::getName() {
-    static auto [major, minor, build, error] = WinrtUtils::impl::getGameVersion();
-
-    if (minor < 26) return hat::member_at<std::string>(this, GET_OFFSET("BlockLegacy::name"));
-
-    else {
-        std::string s = hat::member_at<std::string>(this, GET_OFFSET("BlockLegacy::namespace"));
-
-        size_t pos = s.find(':');
-        if (pos != std::string::npos) {
-            s.erase(0, pos + 1);
-        }
-
-        return s;
-    }
+    // In all versions, BlockLegacy::name holds the short block name (e.g. "air", "stone").
+    // Pre-1.26.x: name = short name, namespace = "minecraft"
+    // 1.26.x: name = short name (at shifted offset 0x80), namespace = "minecraft" (at 0xA8)
+    return hat::member_at<std::string>(this, GET_OFFSET("BlockLegacy::name"));
 }
 
 std::string BlockLegacy::getNamespace() {
-    static auto [major, minor, build, error] = WinrtUtils::impl::getGameVersion();
-
-    std::string s = hat::member_at<std::string>(this, GET_OFFSET("BlockLegacy::namespace"));
-
-    if (minor < 26) return s;
-
-    else {
-
-        size_t pos = s.find(':');
-        if (pos != std::string::npos) {
-            s.erase(pos);
-        }
-
-        return s;
-    }
+    // In all versions, BlockLegacy::namespace holds just the namespace prefix (e.g. "minecraft").
+    return hat::member_at<std::string>(this, GET_OFFSET("BlockLegacy::namespace"));
 }

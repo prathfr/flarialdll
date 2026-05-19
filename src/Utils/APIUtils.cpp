@@ -10,7 +10,45 @@
 #include <curl/curl/curl.h>
 #include <curl/curl/easy.h>
 
+#include <chrono>
+#include <mutex>
+#include <thread>
+
 #include "SDK/SDK.hpp"
+
+namespace {
+struct VIPStreamState {
+    std::string message;
+};
+
+void ensureCurlInitialized() {
+    static std::once_flag curlInitFlag;
+    std::call_once(curlInitFlag, []() {
+        if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+            LOG_ERROR("failed curl_global_init");
+        }
+    });
+}
+
+int VIPStreamProgressCallback(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return APIUtils::vipStreamRunning ? 0 : 1;
+}
+
+void handleVIPWebSocketMessage(const std::string& message) {
+    try {
+        if (!nlohmann::json::accept(message)) {
+            return;
+        }
+
+        auto eventJson = nlohmann::json::parse(message);
+        if (eventJson.value("type", "") == "vip_update" && eventJson.contains("vips")) {
+            APIUtils::applyVips(eventJson["vips"]);
+        }
+    } catch (const std::exception& e) {
+        Logger::warn("VIP websocket message rejected: {}", e.what());
+    }
+}
+}
 
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* output) {
     size_t totalSize = size * nmemb;
@@ -274,6 +312,116 @@ nlohmann::json APIUtils::getVips() {
     }
 }
 
+void APIUtils::applyVips(const nlohmann::json& vipsJson) {
+    decltype(vipUserToRole) updatedVips;
+
+    for (const auto& [role, users] : vipsJson.items()) {
+        if (!users.is_array()) {
+            continue;
+        }
+
+        for (const auto& user : users) {
+            if (user.is_string()) {
+                updatedVips[user.get<std::string>()] = role;
+            }
+        }
+    }
+
+    std::unique_lock lock(rolesMutex);
+    vipUserToRole = std::move(updatedVips);
+}
+
+void APIUtils::startVipUpdates() {
+    bool expected = false;
+    if (!vipStreamRunning.compare_exchange_strong(expected, true)) {
+        return;
+    }
+
+    vipStreamThread = std::thread([]() {
+        ensureCurlInitialized();
+
+        while (vipStreamRunning) {
+            CURL* curl = curl_easy_init();
+            if (!curl) {
+                Logger::warn("VIP stream failed to initialize curl");
+                std::this_thread::sleep_for(std::chrono::seconds(15));
+                continue;
+            }
+
+            curl_easy_setopt(curl, CURLOPT_URL, "wss://api.flarial.xyz/ws/vips");
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, "Samsung Smart Fridge");
+            // curl 8.x defaults CURLOPT_PROTOCOLS to HTTP/HTTPS/FTP/FTPS only — ws/wss must be opted in
+            curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "wss,ws");
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 90L);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, VIPStreamProgressCallback);
+            curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L);
+
+            CURLcode res = curl_easy_perform(curl);
+            if (res == CURLE_OK) {
+                char buffer[65536];
+                VIPStreamState state;
+
+                while (vipStreamRunning) {
+                    size_t received = 0;
+                    const curl_ws_frame* frame = nullptr;
+                    res = curl_ws_recv(curl, buffer, sizeof(buffer), &received, &frame);
+
+                    // CONNECT_ONLY=2 leaves the socket non-blocking; CURLE_AGAIN just means
+                    // no frame has arrived yet. Idle until the next read instead of reconnecting.
+                    if (res == CURLE_AGAIN) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                        continue;
+                    }
+
+                    if (res != CURLE_OK) {
+                        break;
+                    }
+
+                    if (!frame || received == 0) {
+                        continue;
+                    }
+
+                    if ((frame->flags & CURLWS_CLOSE) != 0) {
+                        break;
+                    }
+
+                    if ((frame->flags & CURLWS_TEXT) == 0 && (frame->flags & CURLWS_CONT) == 0) {
+                        continue;
+                    }
+
+                    state.message.append(buffer, received);
+                    if (frame->bytesleft == 0) {
+                        handleVIPWebSocketMessage(state.message);
+                        state.message.clear();
+                    }
+                }
+            }
+
+            curl_easy_cleanup(curl);
+
+            if (!vipStreamRunning) {
+                break;
+            }
+
+            if (res != CURLE_OK && res != CURLE_ABORTED_BY_CALLBACK) {
+                Logger::debug("VIP stream disconnected: {}", curl_easy_strerror(res));
+            }
+
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    });
+}
+
+void APIUtils::stopVipUpdates() {
+    vipStreamRunning = false;
+    if (vipStreamThread.joinable()) {
+        vipStreamThread.join();
+    }
+}
+
 nlohmann::json APIUtils::getUsers() {
     try {
         std::string users = get("https://api.flarial.xyz/allOnlineUsers");
@@ -301,6 +449,8 @@ nlohmann::json APIUtils::getUsers() {
 }
 
 bool APIUtils::hasRole(std::string_view role, std::string_view name) {
+    std::shared_lock lock(rolesMutex);
+
     const auto vipIt = vipUserToRole.find(name);
     const auto isVip = (vipIt != vipUserToRole.cend()) && (vipIt->second == role);
 
@@ -310,6 +460,16 @@ bool APIUtils::hasRole(std::string_view role, std::string_view name) {
 
     const auto isOnline = onlineUsersSet.contains(name);
     return isOnline && (role == "Regular");
+}
+
+bool APIUtils::isOnlineUser(std::string_view name) {
+    std::shared_lock lock(rolesMutex);
+    return onlineUsersSet.contains(name);
+}
+
+std::vector<std::string> APIUtils::getOnlineUsersSnapshot() {
+    std::shared_lock lock(rolesMutex);
+    return onlineUsers;
 }
 
 std::vector<std::string> APIUtils::ListToVector(const std::string& commandListStr) {

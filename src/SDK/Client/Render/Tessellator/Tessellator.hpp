@@ -36,10 +36,18 @@ public:
         func(this, &color);
     }
 
-    void setRotation(float angle, Vec3<float> pivot) {
+    void setRotation(float angle, Vec3<float> axis) {
+        if (VersionUtils::checkAboveOrEqual(26, 20)) {
+            using func_t = void(__fastcall*)(Tessellator *, float, const Vec3<float>*);
+            static auto func = reinterpret_cast<func_t>(GET_SIG_ADDRESS("Tessellator::setRotation"));
+            if (!func) return;
+            return func(this, angle, &axis);
+        }
+
         using func_t = void(__fastcall*)(Tessellator *, float, Vec3<float>);
         static auto func = reinterpret_cast<func_t>(GET_SIG_ADDRESS("Tessellator::setRotation"));
-        func(this, angle, pivot);
+        if (!func) return;
+        func(this, angle, axis);
     }
 
     void resetTransform(bool a1) {
